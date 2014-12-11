@@ -1,4 +1,4 @@
-module Jvm.Data.ClassFormat where
+module ClassFormat where
 import qualified Data.ByteString.Lazy as BS
 
 -- class file format
