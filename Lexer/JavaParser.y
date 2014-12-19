@@ -111,8 +111,8 @@ qualifiedname    : name DOT IDENTIFIER { let name = $1 in name ($1 ++ [$2]) $3 }
 
 simplename       : IDENTIFIER { $1 }
 
-classdeclaration : CLASS IDENTIFIER classbody {Class(TC($2, []), [], []) }
-                 | modifiers CLASS IDENTIFIER classbody {Class(TC($3, []), [], []) }
+classdeclaration : CLASS IDENTIFIER classbody {Class($2, fst $3 , snd $3)}
+                 | modifiers CLASS IDENTIFIER classbody {Class($3, fst $4, snd $4) }
 
 classbody        : LBRACKET RBRACKET  { ([], []) }
 		         | LBRACKET classbodydeclarations  RBRACKET { $2 }
@@ -127,7 +127,6 @@ modifier         : PUBLIC { $1 }
 		 		 | PROTECTED { $1 }
                  | PRIVATE { $1 }
                  | STATIC { $1 }
-                 | ABSTRACT { $1 }
 
 classtype        : classorinterfacetype{ }
 

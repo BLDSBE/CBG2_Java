@@ -39,7 +39,7 @@ tokens :-
 	\=			{ \s -> ASSIGN }
 	\#			{ \s -> SHARP }
 
-  	abstract    { \s -> ABSTRACT }
+  	--abstract    { \s -> ABSTRACT }
   	boolean     { \s -> BOOLEAN }
   	break		{ \s -> BREAK }
 	case		{ \s -> CASE }
@@ -78,8 +78,9 @@ tokens :-
       
 {
 data Token
-    = ABSTRACT 
-    | BOOLEAN 
+    = 
+    -- ABSTRACT 
+     BOOLEAN 
     | BREAK 
     | CASE 
     -- | CATCH 
