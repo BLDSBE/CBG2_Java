@@ -1,5 +1,3 @@
-package compilerbau;
-
 /**
  *
  * @author Daniel
