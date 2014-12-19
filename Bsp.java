@@ -4,7 +4,7 @@ package compilerbau;
  *
  * @author Daniel
  */
-public class Compilerbau {
+public class Bsp {
 
     /**
      * @param args the command line arguments
