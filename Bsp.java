@@ -17,7 +17,7 @@ public class Bsp {
         else
             b = 'f';
         
-        System.out.println("bool war "+ b +", deshalb ist i = "+i);
+        //System.out.println("bool war "+ b +", deshalb ist i = "+i);
         
     }
     
