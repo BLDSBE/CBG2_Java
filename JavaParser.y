@@ -1,5 +1,5 @@
 {
-module Main where
+module JavaParser (parse) where
 import AbsSyn
 import Lexer
 }
