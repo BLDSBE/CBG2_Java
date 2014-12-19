@@ -13,7 +13,7 @@ import Lexer
 	    BOOLEAN  	{ BOOLEAN }
 	    BREAK 	 	{ BREAK }
 	    CASE 	 	{ CASE }
-	    --CATCH 		{ CATCH }
+	    --	CATCH 		{ CATCH }
 	    CHAR  		{ CHAR }
 	    CLASS 		{ CLASS }
 	    CONTINUE 	{ CONTINUE }
@@ -187,8 +187,8 @@ classtypelist    : classtype { }
 methoddeclarator : IDENTIFIER LBRACE  RBRACE  { }
 		         | IDENTIFIER LBRACE formalparameterlist  RBRACE  { }
 
-primitivetype    : BOOLEAN { }
-		         | numerictype { }
+primitivetype    : BOOLEAN { $1 }
+		         | numerictype { $1 }
 
 referencetype    : classorinterfacetype { }
 
@@ -206,7 +206,7 @@ argumentlist     : expression { }
 
 numerictype      : integraltype { }
 
-variabledeclaratorid : IDENTIFIER { }
+variabledeclaratorid : IDENTIFIER { $1 }
 
 variableinitializer  : expression { }
 
@@ -274,10 +274,10 @@ conditionalorexpression : conditionalandexpression { }
 
 lefthandside     : name { }
 
-assignmentoperator : ASSIGN{ }
-		           | TIMESEQUAL { }
+assignmentoperator : ASSIGN{  }
+		           | TIMESEQUAL {  }
 		           | DIVIDEEQUAL { }
-		           |         MODULOEQUAL { }
+		           | MODULOEQUAL { }
 		           | PLUSEQUAL { }
 		           | MINUSEQUAL { }
 		           | SHIFTLEFTEQUAL { }
@@ -338,11 +338,11 @@ unaryexpressionnotplusminus : postfixexpression { }
 exclusiveorexpression : andexpression { }
 		              | exclusiveorexpression XOR andexpression { }
 
-literal		 : INTLITERAL { }
-		     | BOOLLITERAL { }
-		     | CHARLITERAL { }
-		     | STRINGLITERAL { }
-		     | JNULL { }
+literal		 : INTLITERAL { Integer $1 }
+		     | BOOLLITERAL { Bool $1 }
+		     | CHARLITERAL { Char $1 }
+		     | STRINGLITERAL { String $1 }
+		     | JNULL { null [$1] }
 
 castexpression	 : LBRACE  primitivetype  RBRACE  unaryexpression { }
  		         | LBRACE  expression  RBRACE  unaryexpressionnotplusminus{ }
