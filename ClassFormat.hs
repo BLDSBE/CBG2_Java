@@ -199,6 +199,8 @@ data Method_Info = Method_Info
                         }
                     deriving Show
 
+type Code = String
+
 data Attribute_Info =
         AttributeGeneric 
             { index_name_attr           :: Index_Constant_Pool
@@ -217,8 +219,8 @@ data Attribute_Info =
             , len_stack_attr            :: Int                              -- max_stack
             , len_local_attr            :: Int                              -- max_local
             , tam_code_attr             :: Int                              -- code_length
-            , array_code_attr           :: ListaInt                         -- code como array de bytes
---, array_code_attr                     :: [Code]                           -- code array (altern.)
+            --, array_code_attr           :: ListaInt                         -- code como array de bytes
+            , array_code_attr           :: [Code]                           -- code array (altern.)
             , tam_ex_attr               :: Int                              -- exceptions_length
             , array_ex_attr             :: Tupla4Int                        -- no usamos
             , tam_atrr_attr             :: Int                              -- attributes_count

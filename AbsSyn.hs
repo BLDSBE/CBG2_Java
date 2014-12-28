@@ -4,6 +4,8 @@ type Type = String
 
 data Class = Class(Type, [FieldDecl], [MethodDecl]) deriving (Show)
 
+getMethodDeclsFromClass (Class(_, _, m)) = m
+
 data FieldDecl = FieldDecl(Type, String) deriving (Show)
 
 data MethodDecl = Method(Type, String,[(Type,String)], Stmt) deriving (Show)
