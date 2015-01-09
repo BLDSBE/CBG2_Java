@@ -4,6 +4,8 @@
  */
 public class Bsp {
 
+    int n = 0;
+    
     /**
      * @param args the command line arguments
      */
