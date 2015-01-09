@@ -1,6 +1,7 @@
 module Codegen where
 import ClassFormat
 import AbsSyn
+import Data.List.Split
 import qualified Text.Show.Pretty as Pr
 import Data.Map (Map)             -- This just imports the type name
 import qualified Data.Map as Map  -- Imports everything else, but with names 
