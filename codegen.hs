@@ -2,6 +2,7 @@ module Codegen where
 import ClassFormat
 import AbsSyn
 import Data.List.Split
+import Data.List
 import qualified Text.Show.Pretty as Pr
 import Data.Map (Map)             -- This just imports the type name
 import qualified Data.Map as Map  -- Imports everything else, but with names 
@@ -17,7 +18,8 @@ namesAndTypes c@(Class(typ, [], (Method(t, n, args, _)):methodDecls)) i =
 namesAndTypes c@(Class(typ, FieldDecl(t, n):fieldDecls, m)) i = 
 	Map.insert (n ++ ":" ++ t) i (namesAndTypes (Class(typ, fieldDecls, m)) (i + 1))
 
-
+sortMap :: Map String Int -> Map String Int
+sortMap m = Map.fromList $ (sortBy (\(a1, b1) (a2, b2) -> b1 `compare` b2)) $ Map.toList m
 
 getCPHashTable :: Class -> Map String Int
 getCPHashTable (Class(typ, fieldDecls, methodDecls)) = 
@@ -26,9 +28,9 @@ getCPHashTable (Class(typ, fieldDecls, methodDecls)) =
 	Map.union 
 		(Map.union methodHT fieldHT) 
 		(Map.fromList 
-			[ (typ, Map.size fieldHT)
+			[ (typ, (Map.size fieldHT) + (Map.size methodHT))
 			, ("java/lang/Object"
-			, (Map.size fieldHT) + 1)
+			, (Map.size fieldHT) + (Map.size methodHT) + 1)
 			]
 		)
 
@@ -58,17 +60,33 @@ addNameAndType :: (String, String) -> Map String Int -> Map String Int
 addNameAndType (name, typ) map = Map.insert (name ++ ":" ++ typ) (Map.size map) map
 
 cpht_toCP_Infos :: Map String Int -> CP_Infos
-cpht_toCP_Infos ht = Map.foldWithKey (\name index rest -> (Utf8_Info { tag_cp = TagUtf8, tam_cp = length name, cad_cp = name, desc = name }):rest) [] ht
+cpht_toCP_Infos ht = foldr
+	(\(name, index) rest -> 
+		(Utf8_Info { 
+			tag_cp = TagUtf8, 
+			tam_cp = length name, 
+			cad_cp = name, 
+			desc = "#" ++ (show index) ++ ":" ++ name 
+		}):rest) [] 
+	((sortBy (\(a1, b1) (a2, b2) -> b1 `compare` b2)) $ Map.toList ht) 
 
-natHT_toCP_Infos :: Map String Int -> CP_Infos
-natHT_toCP_Infos ht = Map.foldWithKey (\name index rest -> let [n, t] = splitOn ":" name in (NameAndType_Info { tag_cp = TagNameAndType, index_name_cp = -1, index_descr_cp = -1, desc = name}):rest) [] ht
+
+
+natHT_toCP_Infos :: Map String Int -> Map String Int -> CP_Infos
+natHT_toCP_Infos ht cpHt = Map.foldWithKey (\name index rest -> let [n, t] = splitOn ":" name in 
+	(NameAndType_Info { 
+		tag_cp = TagNameAndType, 
+		index_name_cp = cpHt Map.! n, 
+		index_descr_cp = cpHt Map.! t, 
+		desc = name
+	}):rest) [] ht
 
 get_CP_Infos :: Class -> CP_Infos
 get_CP_Infos c@(Class(typ, fieldDecls, methodDecls)) = do
 	let cpht = getCPHashTable c
 	let natCpht = namesAndTypes c (Map.size cpht)
 
-	let strings = (cpht_toCP_Infos cpht) ++ (natHT_toCP_Infos natCpht)
+	let strings = (cpht_toCP_Infos cpht) ++ (natHT_toCP_Infos natCpht cpht)
 
 	let i = Map.size cpht
 	let cpStringsClasses = strings ++ [ Class_Info {
@@ -83,9 +101,9 @@ get_CP_Infos c@(Class(typ, fieldDecls, methodDecls)) = do
 		}]
 	cpStringsClasses ++ [ FieldRef_Info {
 		tag_cp = TagFieldRef,
-		index_name_cp = cpht Map.! fName,
+		index_name_cp = cpht Map.! typ,
 		index_nameandtype_cp = natCpht Map.! (fName ++ ":" ++ fTyp),
-		desc = fName
+		desc = typ ++ "." ++ fName ++ ":" ++ fTyp
 		} | FieldDecl(fTyp, fName) <- fieldDecls]
 
 
@@ -142,8 +160,9 @@ codegen c = ClassFile {
 
 main :: IO()
 main = do let example = Class("Bsp", [FieldDecl("I", "n")], [
-						  Method("V", "<init>", [], Block([])
-						  ),
+						  Method("V", "<init>", [], Block([
+						  	StmtExprStmt(Assign("n", TypedExpr(Integer 0, "I")))
+						  ])),
 						  Method("V", "main", [("[Ljava/lang/String;", "args")], Block([
                             LocalVarDecl("I", "i"),
                             StmtExprStmt(Assign("i", TypedExpr(Integer 0, "I"))),
@@ -159,4 +178,5 @@ main = do let example = Class("Bsp", [FieldDecl("I", "n")], [
               --StmtExprStmt(MethodCall(    System.out, "println", [] ))
           print $ getMethodHT (getMethodDeclsFromClass example) 1
           print $ getCPHashTable example
+          print $ sortBy (\(a1, b1) (a2, b2) -> b1 `compare` b2) (Map.toList $ getCPHashTable example)
           putStrLn $ Pr.ppShow $ codegen example

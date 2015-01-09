@@ -200,3 +200,6 @@ testExample = Class("Bsp", [], [
 				])
 			)
 	])
+
+main :: IO()
+main = print $ typecheck [testExample]
