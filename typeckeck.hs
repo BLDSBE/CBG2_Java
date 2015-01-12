@@ -8,10 +8,26 @@ type ClassMap = Map Type (Env, Env) -- A map className => (Fields, Methods)
 type LookUp = Type -> (Env,Env)		-- A function type that allows a direkt lookup in the ClassMap
 												-- and prevents from manipulating it
 
+
 {- TODO:
 	- correct type identifiers
-	- Fix Bug with env in MethodCall
+	- assigns for InstVars???
+	- methods from Object
 -}
+
+
+--Constants-----------------------------------------------------------------------------------------
+booleanType 	= "boolean"
+charType 		= "char"
+intType 			= "int"
+stringType 		= "String"
+nullType 		= "NullType"
+objectType 		= "java/lang/Object"
+
+thisString 		= "this"
+superString 	= "super"
+----------------------------------------------------------------------------------------------------
+
 
 
 --Program-------------------------------------------------------------------------------------------
@@ -26,9 +42,7 @@ getClassMap [] = Map.empty
 getTypedClassList :: ClassMap -> Prg -> Prg
 getTypedClassList cm (c : tail) = 
 	getTypedClass
-		(  (\m t -> 
-				(\a -> case a of Just b -> b; Nothing -> (Map.empty, Map.empty) ) (Map.lookup t m))
-		    cm)
+		((\ m t -> (m Map.! t)) cm) -- extract lookUp function
 		c 
 	: (getTypedClassList cm tail)
 getTypedClassList cm [] = []
@@ -43,8 +57,8 @@ getTypedClass lookUp (Class(typ, fields, methods)) = Class (
 	fields,
 	getTypedMethods 
 		(lookUp) 
-		(Map.insert "super" "Object" -- insert this and super variable into Env
-			(Map.insert "this" typ
+		(Map.insert superString objectType -- insert this and super variable into Env
+			(Map.insert thisString typ
 				(let (fields, methods) = lookUp typ in fields))) 
 		methods     )
 
@@ -123,7 +137,11 @@ getTypedStatementExpr :: LookUp -> Env -> StmtExpr -> StmtExpr
 getTypedStatementExpr lookUp env (Assign(name, e)) = let te = getTypedExpression (lookUp) env e in
 														TypedStmtExpr(
 															Assign(name, te),
-															getTypeFromExpr te) -- TODO: check for errors
+															--getTypeFromExpr te) -- TODO: check for errors
+															(env Map.! name)) -- lookup the type by variable name
+																					-- and don't take the type from "te"
+																					-- to get the correct type if rvalue
+																					-- is "null"
 getTypedStatementExpr lookUp env (New(typ, es)) =
 											TypedStmtExpr(New(typ, getTypedExpressionList (lookUp) env es), typ)
 getTypedStatementExpr lookUp env (MethodCall(e,name,es)) = 
@@ -132,12 +150,8 @@ getTypedStatementExpr lookUp env (MethodCall(e,name,es)) =
 									let typ = (let (fields, methods) = 
 													-- find the associated class
 													lookUp (getTypeFromExpr te) in
-														(\a -> case a of -- "de-Maybe-izing"
-																Just b -> b; 
-																Nothing -> "unknownMethod")
 														-- and lookup the type of the method
-														(Map.lookup name methods) ) 
-																					in
+														(methods Map.! name) )		in
 											TypedStmtExpr(
 												MethodCall(te, name, getTypedExpressionList (lookUp) env es),
 												typ) -- return that type
@@ -154,16 +168,14 @@ getTypedExpressionList lookUp env (e : tail) =
 getTypedExpressionList lookUp env [] = []
 
 getTypedExpression :: LookUp -> Env -> Expr -> Expr
-getTypedExpression lookUp env this@(This) = TypedExpr(this,
-							(\a -> case a of Just b -> b; Nothing -> "Error:_This_unknown") (Map.lookup "this" env))
-getTypedExpression lookUp env super@(Super) = TypedExpr(super,
-							(\a -> case a of Just b -> b; Nothing -> "Error:_Super_unknown") (Map.lookup "super" env))
+getTypedExpression lookUp env this@(This) = TypedExpr(this, (env Map.! thisString))
+getTypedExpression lookUp env super@(Super) = TypedExpr(super, (env Map.! superString))
 getTypedExpression lookUp env lofv@(LocalOrFieldVar(name)) = TypedExpr(lofv, (env Map.! name))
 getTypedExpression lookUp env (InstVar(e, name)) = 
 								let te = getTypedExpression (lookUp) env e in -- type the expression 
 											-- (which returns the class where the variable is declared)
 									let typ = (let (fields, methods) = 
-													-- find the associated class
+													-- find the associated class in the lookUp function
 													lookUp (getTypeFromExpr te) in
 														-- and lookup the type
 														(fields Map.! name) ) in
@@ -179,12 +191,17 @@ getTypedExpression lookUp env (Binary(name, e1, e2)) =
 										let te2 = getTypedExpression (lookUp) env e2 in
 											TypedExpr(
 												Binary(name, te1, te2),
-												getTypeFromExpr te1)
-getTypedExpression lookUp env i@(Integer(_)) = TypedExpr(i, "int")
-getTypedExpression lookUp env b@(Bool(_)) = TypedExpr(b, "boolean")
-getTypedExpression lookUp env c@(Char(_)) = TypedExpr(c, "char")
-getTypedExpression lookUp env s@(String(_)) = TypedExpr(s, "String")
-getTypedExpression lookUp env n@(Jnull) = TypedExpr(Jnull, "NullType") --TODO: What is the type of "null"???
+												if getTypeFromExpr te1 /= nullType then -- Only return nullType if necessary
+													getTypeFromExpr te1	-- ( "null == null" )
+												else if getTypeFromExpr te2 /= nullType then
+													getTypeFromExpr te2
+												else
+													nullType)
+getTypedExpression lookUp env i@(Integer(_)) = TypedExpr(i, intType)
+getTypedExpression lookUp env b@(Bool(_)) = TypedExpr(b, booleanType)
+getTypedExpression lookUp env c@(Char(_)) = TypedExpr(c, charType)
+getTypedExpression lookUp env s@(String(_)) = TypedExpr(s, stringType)
+getTypedExpression lookUp env n@(Jnull) = TypedExpr(Jnull, nullType)
 getTypedExpression lookUp env (StmtExprExpr(se)) = 
 									let tse = getTypedStatementExpr (lookUp) env se in
 										TypedExpr(StmtExprExpr(tse), getTypeFromStmtExpr tse)
@@ -192,21 +209,21 @@ getTypedExpression lookUp env e = e -- should not happen!
 ----------------------------------------------------------------------------------------------------
 
 
-testExample = [Class("Bsp", [FieldDecl("boolean", "myBool")], [
+testExample = [Class("Bsp", [FieldDecl(booleanType, "myBool")], [
 		Method("void", "main", [("String[]", "args")], 
 				Block([
-					LocalVarDecl("int", "i"),
+					LocalVarDecl(intType, "i"),
 					StmtExprStmt(Assign("i", Integer(1))),
-					LocalVarDecl("boolean", "a"),
+					LocalVarDecl(booleanType, "a"),
 					StmtExprStmt(Assign("a", Bool(True))),
-					LocalVarDecl("char", "b"),
+					LocalVarDecl(charType, "b"),
 					StmtExprStmt(Assign("b", Char('t'))),
 					
-					--If(InstVar(LocalOrFieldVar("this"), "myBool"),
-					--		StmtExprStmt(Assign("i", Integer(1))),
-					--		Just (StmtExprStmt(Assign("b", Char('f'))))  )
+					--If(InstVar(LocalOrFieldVar(thisString), "myBool"),
+						--	StmtExprStmt(Assign("i", Integer(1))),
+							--Just (StmtExprStmt(Assign("b", Char('f'))))  )
 							
-					LocalVarDecl("x", "MyClass"),
+					LocalVarDecl("MyClass", "x"),
 					StmtExprStmt(Assign("x", StmtExprExpr(New("MyClass",[])))),
 					
 					While(Bool(True),
@@ -223,24 +240,26 @@ testExample = [Class("Bsp", [FieldDecl("boolean", "myBool")], [
 				])
 			)
 	]),
-	Class("MyClass", [FieldDecl("int", "i")], 
+	Class("MyClass", [FieldDecl(intType, "i")], 
 			[
-				Method("int", "getI", [], Block([Return(LocalOrFieldVar("i"))])),
-				Method("void", "setI", [("int", "i")], Block([StmtExprStmt(Assign("this.i", LocalOrFieldVar("i")))])) --TODO: How do assignments and instvars work?
+				Method(intType, "getI", [], Block([Return(LocalOrFieldVar("i"))])),
+				Method("void", "setI", [(intType, "_i")], Block([StmtExprStmt(Assign("i", LocalOrFieldVar("_i")))])) --TODO: How do assignments and instvars work?
 			])
 	]
 	
-testBlock = [LocalVarDecl("char", "c"),
-					LocalVarDecl("int", "i"),
-					LocalVarDecl("int", "j"),
-					StmtExprStmt(Assign("i", LocalOrFieldVar("j"))) ]
+testBlock = Block([--LocalVarDecl(charType, "c"),
+					--LocalVarDecl(intType, "i"),
+					--LocalVarDecl(intType, "j"),
+					--StmtExprStmt(Assign("j", LocalOrFieldVar("i")))
+					LocalVarDecl("i", intType),
+					Return(LocalOrFieldVar("i")) ])
 					
 testBlock2 = Block([
-					LocalVarDecl("int", "i"),
-					StmtExprStmt(Assign("i", Integer(1))),
-					--LocalVarDecl("boolean", "a"),
+					--LocalVarDecl(intType, "i"),
+					StmtExprStmt(Assign("j", Integer(1))),
+					--LocalVarDecl(booleanType, "a"),
 					--StmtExprStmt(Assign("a", Bool(True))),
-					--LocalVarDecl("char", "b"),
+					--LocalVarDecl(charType, "b"),
 					--StmtExprStmt(Assign("b", Char('t'))),
 					
 					
@@ -252,22 +271,31 @@ testBlock2 = Block([
           
 test = Method("void", "main", [("String[]", "args")], 
 				Block([
-					LocalVarDecl("int", "i"),
+					LocalVarDecl(intType, "i"),
 					StmtExprStmt(Assign("i", Integer(1))),
-					LocalVarDecl("boolean", "a"),
+					LocalVarDecl(booleanType, "a"),
 					StmtExprStmt(Assign("a", Bool(True))),
-					LocalVarDecl("char", "b"),
+					LocalVarDecl(charType, "b"),
 					StmtExprStmt(Assign("b", Char('t'))),
 					
-					If( Binary("&&", Bool(True), Bool(False)), 
+					If( Binary("&&", Bool(True), Bool(False)),
 							StmtExprStmt(Assign("i", Integer(1))), 
 							Just (StmtExprStmt(Assign("b", Char('f'))))  )
 				])
 			)
 
+testInstVars = [
+		Class("A", [FieldDecl(intType, "i"), FieldDecl("B", "x")],
+			[Method("void", "test", [], Block([
+														StmtExprStmt(Assign("i", InstVar(LocalOrFieldVar("x"), "j")))]))]),
+		Class("B",[FieldDecl(intType, "j")],[])
+	]
+
 main :: IO()
 main = print $ typecheck testExample
-	--print $ let (s, env) = getTypedStatement (\ a -> (Map.empty, Map.empty)) Map.empty (LocalVarDecl("char", "c")) in (env Map.! "c")
+	--print $ typecheck testInstVars
+	--print $ getTypedStatement (\ a -> (Map.empty, Map.empty)) (Map.fromList [("j", intType)]) testBlock
 	--print $ getTypedMethodBody (\ a -> (Map.empty, Map.empty)) Map.empty testBlock2
 	--print $ getTypedMethods (\ a -> (Map.empty, Map.empty)) Map.empty [test]
+	--print $ getTypedExpression (\ a -> (Map.empty, Map.empty)) Map.empty (Binary("==", Jnull, Integer(1)))
 
