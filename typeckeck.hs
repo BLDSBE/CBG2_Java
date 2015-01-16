@@ -10,8 +10,6 @@ type LookUp = Type -> (Env,Env)		-- A function type that allows a direkt lookup 
 
 
 {- TODO:
-	- correct type identifiers
-	- assigns for InstVars???
 	- methods from Object
 -}
 
@@ -134,11 +132,13 @@ getTypedStatement lookUp env (StmtExprStmt(se)) =
 
 --StatementExpressions------------------------------------------------------------------------------
 getTypedStatementExpr :: LookUp -> Env -> StmtExpr -> StmtExpr
-getTypedStatementExpr lookUp env (Assign(name, e)) = let te = getTypedExpression (lookUp) env e in
+getTypedStatementExpr lookUp env (Assign(var, e)) = let te = getTypedExpression (lookUp) env e in
+																		let tvar = getTypedExpression (lookUp) env var in
 														TypedStmtExpr(
-															Assign(name, te),
+															Assign(tvar, te),
 															--getTypeFromExpr te) -- TODO: check for errors
-															(env Map.! name)) -- lookup the type by variable name
+															getTypeFromExpr tvar)
+															--(env Map.! name)) -- lookup the type by variable name
 																					-- and don't take the type from "te"
 																					-- to get the correct type if rvalue
 																					-- is "null"
@@ -209,7 +209,7 @@ getTypedExpression lookUp env e = e -- should not happen!
 ----------------------------------------------------------------------------------------------------
 
 
-testExample = [Class("Bsp", [FieldDecl(booleanType, "myBool")], [
+{-testExample = [Class("Bsp", [FieldDecl(booleanType, "myBool")], [
 		Method("void", "main", [("String[]", "args")], 
 				Block([
 					LocalVarDecl(intType, "i"),
@@ -243,7 +243,7 @@ testExample = [Class("Bsp", [FieldDecl(booleanType, "myBool")], [
 	Class("MyClass", [FieldDecl(intType, "i")], 
 			[
 				Method(intType, "getI", [], Block([Return(LocalOrFieldVar("i"))])),
-				Method("void", "setI", [(intType, "_i")], Block([StmtExprStmt(Assign("i", LocalOrFieldVar("_i")))])) --TODO: How do assignments and instvars work?
+				Method("void", "setI", [(intType, "_i")], Block([StmtExprStmt(Assign("i", LocalOrFieldVar("_i")))])) 
 			])
 	]
 	
@@ -282,18 +282,19 @@ test = Method("void", "main", [("String[]", "args")],
 							StmtExprStmt(Assign("i", Integer(1))), 
 							Just (StmtExprStmt(Assign("b", Char('f'))))  )
 				])
-			)
+			)-}
 
-testInstVars = [
+testInstVarsAndAssign = [
 		Class("A", [FieldDecl(intType, "i"), FieldDecl("B", "x")],
 			[Method("void", "test", [], Block([
-														StmtExprStmt(Assign("i", InstVar(LocalOrFieldVar("x"), "j")))]))]),
+														StmtExprStmt(Assign(InstVar(LocalOrFieldVar("this"), "i"), 
+																					InstVar(LocalOrFieldVar("x"), "j")))]))]),
 		Class("B",[FieldDecl(intType, "j")],[])
 	]
 
 main :: IO()
-main = print $ typecheck testExample
-	--print $ typecheck testInstVars
+main = --print $ typecheck testExample
+	print $ typecheck testInstVarsAndAssign
 	--print $ getTypedStatement (\ a -> (Map.empty, Map.empty)) (Map.fromList [("j", intType)]) testBlock
 	--print $ getTypedMethodBody (\ a -> (Map.empty, Map.empty)) Map.empty testBlock2
 	--print $ getTypedMethods (\ a -> (Map.empty, Map.empty)) Map.empty [test]
