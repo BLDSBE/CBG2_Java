@@ -18,8 +18,8 @@ namesAndTypes c@(Class(typ, [], (Method(t, n, args, _)):methodDecls)) i =
 namesAndTypes c@(Class(typ, FieldDecl(t, n):fieldDecls, m)) i = 
 	Map.insert (n ++ ":" ++ t) i (namesAndTypes (Class(typ, fieldDecls, m)) (i + 1))
 
-sortMap :: Map String Int -> Map String Int
-sortMap m = Map.fromList $ (sortBy (\(a1, b1) (a2, b2) -> b1 `compare` b2)) $ Map.toList m
+sortMap :: Map String Int -> [(String, Int)]
+sortMap m = (sortBy (\(a1, b1) (a2, b2) -> b1 `compare` b2)) $ Map.toList m
 
 getCPHashTable :: Class -> Map String Int
 getCPHashTable (Class(typ, fieldDecls, methodDecls)) = 
@@ -68,18 +68,24 @@ cpht_toCP_Infos ht = foldr
 			cad_cp = name, 
 			desc = "#" ++ (show index) ++ ":" ++ name 
 		}):rest) [] 
-	((sortBy (\(a1, b1) (a2, b2) -> b1 `compare` b2)) $ Map.toList ht) 
+	(sortMap ht) 
 
 
 
 natHT_toCP_Infos :: Map String Int -> Map String Int -> CP_Infos
-natHT_toCP_Infos ht cpHt = Map.foldWithKey (\name index rest -> let [n, t] = splitOn ":" name in 
-	(NameAndType_Info { 
-		tag_cp = TagNameAndType, 
-		index_name_cp = cpHt Map.! n, 
-		index_descr_cp = cpHt Map.! t, 
-		desc = name
-	}):rest) [] ht
+natHT_toCP_Infos ht cpHt = foldr 
+	(\(name, index) rest -> let [n, t] = splitOn ":" name in 
+		(NameAndType_Info { 
+			tag_cp = TagNameAndType, 
+			index_name_cp = cpHt Map.! n, 
+			index_descr_cp = cpHt Map.! t, 
+			desc = "#" ++ (show index) ++ ":" ++ name
+		}):rest) [] 
+	(sortMap ht)
+
+get_CP_Map :: Class -> Map String Int
+get_CP_Map c = Map.union strs (namesAndTypes c (Map.size strs))
+	where strs = getCPHashTable c
 
 get_CP_Infos :: Class -> CP_Infos
 get_CP_Infos c@(Class(typ, fieldDecls, methodDecls)) = do
@@ -99,12 +105,18 @@ get_CP_Infos c@(Class(typ, fieldDecls, methodDecls)) = do
     		index_cp = cpht Map.! "java/lang/Object",
     		desc = "java/lang/Object"
 		}]
-	cpStringsClasses ++ [ FieldRef_Info {
+	let cpStringsClassesFields = cpStringsClasses ++ [ FieldRef_Info {
 		tag_cp = TagFieldRef,
 		index_name_cp = cpht Map.! typ,
 		index_nameandtype_cp = natCpht Map.! (fName ++ ":" ++ fTyp),
 		desc = typ ++ "." ++ fName ++ ":" ++ fTyp
 		} | FieldDecl(fTyp, fName) <- fieldDecls]
+	cpStringsClassesFields ++ [MethodRef_Info {
+		tag_cp = TagMethodRef,
+		index_name_cp = cpht Map.! typ,
+		index_nameandtype_cp = natCpht Map.! (mName ++ ":" ++ (getMethodType mTyp mArgs)),
+		desc = typ ++ "." ++ mName ++ ":" ++ mTyp
+	} | Method(mTyp, mName, mArgs, _) <- methodDecls]
 
 
 get_CP_Index :: Map String Integer -> String -> Int
@@ -129,23 +141,25 @@ get_Field_Infos c@(Class(_, fieldDecls, _)) = let ht = getCPHashTable c in
 	array_attr_fi = []
 } | fr@(FieldDecl(typ, name)) <- fieldDecls]
 
+
+--TODO--
 get_Method_Infos :: Class -> Method_Infos
 get_Method_Infos c = []
 
 get_Attribute_Infos :: Class -> Attribute_Infos
 get_Attribute_Infos c = []
-
+--End TODO--
 
 codegen :: Class -> ClassFile
-codegen c = ClassFile {
+codegen c@(Class(typ, fieldDecls, methodDecls)) = ClassFile {
     magic = Magic,
     minver = MinorVersion 0,
     maxver = MajorVersion 52,
     count_cp = length $ get_CP_Infos c,
     array_cp = get_CP_Infos c,
     acfg = get_ClassAccessFlags c,
-    this = ThisClass { index_th = -1 },
-    super = SuperClass { index_sp = -1 },
+    this = ThisClass { index_th = cpHt Map.! typ },
+    super = SuperClass { index_sp = cpHt Map.! "java/lang/Object" },
     count_interfaces = length $ get_Interfaces c,
     array_interfaces = get_Interfaces c,
     count_fields = length $ get_Field_Infos c,
@@ -154,29 +168,29 @@ codegen c = ClassFile {
     array_methods = get_Method_Infos c,
     count_attributes = length $ get_Attribute_Infos c,
     array_attributes = get_Attribute_Infos c
-}
+} where cpHt = get_CP_Map c
 
 
 
 main :: IO()
 main = do let example = Class("Bsp", [FieldDecl("I", "n")], [
 						  Method("V", "<init>", [], Block([
-						  	StmtExprStmt(Assign("n", TypedExpr(Integer 0, "I")))
+						  	StmtExprStmt(Assign(LocalOrFieldVar("n"), TypedExpr(Integer 0, "I")))
 						  ])),
 						  Method("V", "main", [("[Ljava/lang/String;", "args")], Block([
                             LocalVarDecl("I", "i"),
-                            StmtExprStmt(Assign("i", TypedExpr(Integer 0, "I"))),
+                            StmtExprStmt(Assign(LocalOrFieldVar("i"), TypedExpr(Integer 0, "I"))),
                             LocalVarDecl("boolean", "a"),
-                            StmtExprStmt(Assign("a", TypedExpr(Bool True, "boolean"))),
+                            StmtExprStmt(Assign(LocalOrFieldVar("a"), TypedExpr(Bool True, "boolean"))),
                             LocalVarDecl("char", "b"),
-                            StmtExprStmt(Assign("b", TypedExpr(Char('t'), "char"))),
+                            StmtExprStmt(Assign(LocalOrFieldVar("b"), TypedExpr(Char('t'), "char"))),
                             If(TypedExpr(LocalOrFieldVar("a"), "boolean"), 
-                                StmtExprStmt(Assign("a", TypedExpr(Integer 5, "I"))), 
-                                Just (StmtExprStmt(Assign("b", TypedExpr(Char('f'), "char"))))
+                                StmtExprStmt(Assign(LocalOrFieldVar("a"), TypedExpr(Integer 5, "I"))), 
+                                Just (StmtExprStmt(Assign(LocalOrFieldVar("b"), TypedExpr(Char('f'), "char"))))
                             )]))
 						  ])
               --StmtExprStmt(MethodCall(    System.out, "println", [] ))
           print $ getMethodHT (getMethodDeclsFromClass example) 1
-          print $ getCPHashTable example
+          print $  Map.toList $ getCPHashTable example
           print $ sortBy (\(a1, b1) (a2, b2) -> b1 `compare` b2) (Map.toList $ getCPHashTable example)
           putStrLn $ Pr.ppShow $ codegen example
