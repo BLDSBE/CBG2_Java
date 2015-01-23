@@ -141,11 +141,61 @@ get_Field_Infos c@(Class(_, fieldDecls, _)) = let ht = getCPHashTable c in
 	array_attr_fi = []
 } | fr@(FieldDecl(typ, name)) <- fieldDecls]
 
+getMethodAccessFlags :: Class -> MethodDecl -> AccessFlags
+getMethodAccessFlags _ _ = AccessFlags [1] 
+
+get_Method_Infos :: Class -> Method_Infos
+get_Method_Infos c@(Class(_, _, methodDecls)) = let ht = getCPHashTable c in 
+	[ Method_Info {	
+	  af_mi = getMethodAccessFlags c m,
+	  index_name_mi = ht Map.! name,
+	  index_descr_mi = ht Map.! (getMethodType typ args),
+	  tam_mi = -1,
+	  array_attr_mi = [AttributeCode{
+	  	index_name_attr = -1,
+	  	tam_len_attr = -1,
+	  	len_stack_attr = -1,
+	  	len_local_attr = -1,
+	  	tam_code_attr = length $ compileStmt code,
+	  	array_code_attr = compileStmt code,
+	  	tam_ex_attr = 0,
+	  	array_ex_attr = [],
+	  	tam_atrr_attr = 0,
+	  	array_attr_attr = []
+	  }]
+}| m@(Method(typ, name, args, code)) <- methodDecls]
+
+compileStmt :: Stmt -> [Code]
+compileStmt (Block([])) = []
+compileStmt (Block(stmt:stmts)) = (compileStmt stmt) ++ (compileStmt $ Block stmts)
+compileStmt (Return(expr)) = compileExpr expr
+compileStmt (While(expr, stmt)) = []
+compileStmt (LocalVarDecl(typ, str)) = []
+compileStmt (If(expr, stmt, mbStmt)) = []
+compileStmt (StmtExprStmt(stmtEpxr)) = []
+
+compileExpr :: Expr -> [Code]
+compileExpr This = ["push this"]
+compileExpr Super = ["push super"]
+compileExpr (LocalOrFieldVar s) = ["push " ++ s]
+compileExpr (InstVar (expr, str)) = []
+compileExpr (Unary (str, expr)) = []
+compileExpr (Binary (str, expr1, expr2)) = []
+compileExpr (Integer i) = ["push " ++ (show i)]
+compileExpr (Bool b) = ["push " ++ (show b)]
+compileExpr (Char c) = ["push " ++ [c]]
+compileExpr (String s) = ["push " ++ s]
+compileExpr (Jnull) = ["push null"]
+compileExpr (StmtExprExpr(stmtExpr)) = [compileStmtExpr stmtExpr]
+compileExpr (TypedExpr(expr, typ)) = []
+
+compileStmtExpr :: StmtExpr -> [Code]
+compileStmtExpr (Assign(expr1, expr2)) = []
+compileStmtExpr (New(typ, exprs)) = []
+compileStmtExpr (MethodCall(expr, str, exprs)) = []
+compileStmtExpr (TypedStmtExpr(stmtExpr, typ)) = []
 
 --TODO--
-get_Method_Infos :: Class -> Method_Infos
-get_Method_Infos c = []
-
 get_Attribute_Infos :: Class -> Attribute_Infos
 get_Attribute_Infos c = []
 --End TODO--
