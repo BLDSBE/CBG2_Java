@@ -13,6 +13,7 @@ data MethodDecl = Method(Type, String, [(Type,String)], Stmt, Bool) deriving (Sh
 
 data Stmt = Block([Stmt])
           | Return( Expr )
+          | ReturnV
           | While( Expr , Stmt )
           | LocalVarDecl(Type, String) 
           | If(Expr, Stmt , Maybe Stmt)
