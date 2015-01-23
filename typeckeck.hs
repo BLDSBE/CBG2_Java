@@ -1,5 +1,6 @@
 module Typechek where
 import AbsSyn
+import Constants
 import Data.Map (Map)
 import qualified Data.Map as Map
 
@@ -12,21 +13,6 @@ type LookUp = Type -> (Env,Env)		-- A function type that allows a direkt lookup 
 {- TODO:
 	- methods from Object
 -}
-
-
---Constants-----------------------------------------------------------------------------------------
-booleanType 	= "boolean"
-charType 		= "char"
-intType 			= "int"
-stringType 		= "String"
-nullType 		= "NullType"
-objectType 		= "java/lang/Object"
-
-thisString 		= "this"
-superString 	= "super"
-----------------------------------------------------------------------------------------------------
-
-
 
 --Program-------------------------------------------------------------------------------------------
 typecheck :: Prg -> Prg
@@ -61,7 +47,7 @@ getTypedClass lookUp (Class(typ, fields, methods)) = Class (
 		methods     )
 
 getEnvFromMethods :: [MethodDecl] -> Env
-getEnvFromMethods (Method(typ, name, _, _) : tail) =
+getEnvFromMethods (Method(typ, name, _, _, _) : tail) =
 	Map.insert name typ (getEnvFromMethods tail)
 getEnvFromMethods [] = Map.empty
 
@@ -75,9 +61,9 @@ getEnvFromFields [] = Map.empty
 
 --Methods-------------------------------------------------------------------------------------------
 getTypedMethods :: LookUp -> Env -> [MethodDecl] -> [MethodDecl]
-getTypedMethods lookUp env (Method(typ, name, args, body) : methods) =
+getTypedMethods lookUp env (Method(typ, name, args, body, static) : methods) =
 	let newEnv = Map.union (getEnvFromArgList args) env in -- notice that args possibly override env
-		Method(typ, name, args, getTypedMethodBody (lookUp) newEnv body)
+		Method(typ, name, args, getTypedMethodBody (lookUp) newEnv body, static)
 		: getTypedMethods (lookUp) env methods
 getTypedMethods lookUp env [] = []
 
@@ -106,6 +92,7 @@ getTypedStatementList lookUp env [] = []
 getTypedStatement :: LookUp -> Env -> Stmt -> (Stmt, Env)
 getTypedStatement lookUp env (Block(sl)) = (Block(getTypedStatementList (lookUp) env sl), env)
 getTypedStatement lookUp env (Return(e)) = (Return(getTypedExpression (lookUp) env e), env)
+getTypedStatement lookUp env r@(ReturnV) = (r, env)
 getTypedStatement lookUp env (While(e, s)) = (While(getTypedExpression (lookUp) env e, 
 																let (newS, newEnv) = 
 																		getTypedStatement (lookUp) env s in newS), env)
@@ -182,30 +169,70 @@ getTypedExpression lookUp env (InstVar(e, name)) =
 											TypedExpr(InstVar(te, name), typ) -- return that type
 
 getTypedExpression lookUp env (Unary(name, e)) = let te = getTypedExpression (lookUp) env e in
+							-- Possible operators: ++,--,-,!,~,+: pass types
 													TypedExpr(
 														Unary(name, te),
 														getTypeFromExpr te)
+
 getTypedExpression lookUp env (Binary(name, e1, e2)) =
 							--TODO: Maybe check and compare types and throw errors if necessary
 									let te1 = getTypedExpression (lookUp) env e1 in
 										let te2 = getTypedExpression (lookUp) env e2 in
+											let t1 = getTypeFromExpr te1 in
+												let t2 = getTypeFromExpr te2 in
 											TypedExpr(
 												Binary(name, te1, te2),
-												if getTypeFromExpr te1 /= nullType then -- Only return nullType if necessary
-													getTypeFromExpr te1	-- ( "null == null" )
-												else if getTypeFromExpr te2 /= nullType then
-													getTypeFromExpr te2
-												else
-													nullType)
+												getTypeByOperator name t1 t2)
+												
 getTypedExpression lookUp env i@(Integer(_)) = TypedExpr(i, intType)
 getTypedExpression lookUp env b@(Bool(_)) = TypedExpr(b, booleanType)
 getTypedExpression lookUp env c@(Char(_)) = TypedExpr(c, charType)
 getTypedExpression lookUp env s@(String(_)) = TypedExpr(s, stringType)
-getTypedExpression lookUp env n@(Jnull) = TypedExpr(Jnull, nullType)
+getTypedExpression lookUp env n@(Jnull) = TypedExpr(n, nullType)
+getTypedExpression lookUp env ci@(ClassId(typ)) = TypedExpr(ci, typ)
 getTypedExpression lookUp env (StmtExprExpr(se)) = 
 									let tse = getTypedStatementExpr (lookUp) env se in
 										TypedExpr(StmtExprExpr(tse), getTypeFromStmtExpr tse)
 getTypedExpression lookUp env e = e -- should not happen!
+
+-- <<,>>,>>>: lvalue
+-- *,/: "bigger" type
+-- %: integer
+-- <,>,<=,>=,instanceof,==,!=: boolean
+-- &,|,^: lvalue, rvalue (either integer type or boolean)
+-- &&, ||: boolean
+getTypeByOperator :: String -> Type -> Type -> Type
+getTypeByOperator op t1 t2 = 
+	if 	  op == shiftL 			then t1
+	else if op == shiftR2 			then t1
+	else if op == shiftR3 			then t1
+	
+	else if op == multiplication 	then greaterType t1 t2
+	else if op == division 			then greaterType t1 t2
+	
+	else if op == modulo 			then intType
+	
+	else if op == lessThan 			then booleanType
+	else if op == greaterThan 		then booleanType
+	else if op == lessOrEqual 		then booleanType
+	else if op == greaterOrEqual 	then booleanType
+	else if op == instanceOf 		then booleanType
+	else if op == equals 			then booleanType
+	else if op == unequal 			then booleanType
+	
+	else if op == and1 				then matchTypes t1 t2
+	else if op == or1 				then matchTypes t1 t2
+	else if op == xor 				then matchTypes t1 t2
+
+	else if op == and2 				then booleanType
+	else if op == or2 				then booleanType
+	else "ERROR: Unknown operator"
+
+greaterType :: Type -> Type -> Type
+greaterType t1 t2 = intType --TODO: errors
+
+matchTypes :: Type -> Type -> Type
+matchTypes t1 t2 = t1 --TODO: check for equality and throw errors if necessary
 ----------------------------------------------------------------------------------------------------
 
 
@@ -286,10 +313,49 @@ test = Method("void", "main", [("String[]", "args")],
 
 testInstVarsAndAssign = [
 		Class("A", [FieldDecl(intType, "i"), FieldDecl("B", "x")],
-			[Method("void", "test", [], Block([
+			[Method(voidType, "test", [], Block([
 														StmtExprStmt(Assign(InstVar(LocalOrFieldVar("this"), "i"), 
-																					InstVar(LocalOrFieldVar("x"), "j")))]))]),
+																					InstVar(LocalOrFieldVar("x"), "j")))]), False)]),
 		Class("B",[FieldDecl(intType, "j")],[])
+	]
+
+testOperators = [
+	Class("Operators", [
+			FieldDecl(intType, "i"),
+			FieldDecl(charType, "c"),
+			FieldDecl(booleanType, "b")
+		],
+		[Method(voidType, "ops",[],Block([
+				StmtExprStmt(Assign(LocalOrFieldVar("i"), Binary(shiftL, Integer(1), Integer(2)))),
+				StmtExprStmt(Assign(LocalOrFieldVar("i"), Binary(shiftR2, Integer(1), Integer(2)))),
+				StmtExprStmt(Assign(LocalOrFieldVar("i"), Binary(shiftR3, Integer(1), Integer(2)))),
+			
+				StmtExprStmt(Assign(LocalOrFieldVar("i"), Binary(multiplication, Integer(1), Integer(2)))),
+				StmtExprStmt(Assign(LocalOrFieldVar("i"), Binary(division, Integer(1), Integer(2)))),
+				StmtExprStmt(Assign(LocalOrFieldVar("i"), Binary(modulo, Integer(1), Integer(2)))),
+				
+				StmtExprStmt(Assign(LocalOrFieldVar("b"), Binary(lessThan, Integer(1), Integer(2)))),
+				StmtExprStmt(Assign(LocalOrFieldVar("b"), Binary(lessOrEqual, Integer(1), Integer(2)))),
+				StmtExprStmt(Assign(LocalOrFieldVar("b"), Binary(greaterOrEqual, Integer(1), Integer(2)))),
+				StmtExprStmt(Assign(LocalOrFieldVar("b"), Binary(greaterThan, Integer(1), Integer(2)))),
+				StmtExprStmt(Assign(LocalOrFieldVar("b"), Binary(equals, Integer(1), Integer(2)))),
+				StmtExprStmt(Assign(LocalOrFieldVar("b"), Binary(unequal, Integer(1), Integer(2)))),
+				
+				StmtExprStmt(Assign(LocalOrFieldVar("i"), Binary(and1, Integer(1), Integer(2)))),
+				StmtExprStmt(Assign(LocalOrFieldVar("b"), Binary(and1, Bool(True), Bool(False)))),
+				StmtExprStmt(Assign(LocalOrFieldVar("i"), Binary(or1, Integer(1), Integer(2)))),
+				StmtExprStmt(Assign(LocalOrFieldVar("b"), Binary(or1, Bool(True), Bool(False)))),
+				StmtExprStmt(Assign(LocalOrFieldVar("i"), Binary(xor, Integer(1), Integer(2)))),
+				StmtExprStmt(Assign(LocalOrFieldVar("b"), Binary(xor, Bool(True), Bool(False)))),
+				StmtExprStmt(Assign(LocalOrFieldVar("b"), Binary(and2, Bool(True), Bool(False)))),
+				StmtExprStmt(Assign(LocalOrFieldVar("b"), Binary(or2, Bool(True), Bool(False))))
+			]), False)])
+	]
+
+testStatic = [
+		Class("A", [], [ Method(voidType, "staticMethod", [], Block([]), True) ]),
+		Class("B", [], [ Method(voidType, "callStaticMethod", [], Block([
+								StmtExprStmt(MethodCall(ClassId("A"), "staticMethod", [])) ]), True) ])
 	]
 
 main :: IO()

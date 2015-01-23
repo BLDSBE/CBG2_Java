@@ -8,7 +8,7 @@ getMethodDeclsFromClass (Class(_, _, m)) = m
 
 data FieldDecl = FieldDecl(Type, String) deriving (Show)
 
---                       typ   name    args             code  static
+--                       typ   name    args             body  static
 data MethodDecl = Method(Type, String, [(Type,String)], Stmt, Bool) deriving (Show)
 
 data Stmt = Block([Stmt])
@@ -20,8 +20,7 @@ data Stmt = Block([Stmt])
           | StmtExprStmt(StmtExpr)
           deriving (Show)
 
-data StmtExpr = --Assign(String, Expr)
-					Assign(Expr, Expr)
+data StmtExpr = Assign(Expr, Expr)
               | New(Type, [Expr])
               | MethodCall(Expr, String, [Expr]) 
               | TypedStmtExpr(StmtExpr, Type)
@@ -40,6 +39,7 @@ data Expr = This
           | Char(Char)
           | String(String)
           | Jnull
+          | ClassId(Type)				-- used for static method calls and class vars
           | StmtExprExpr(StmtExpr)
           | TypedExpr(Expr, Type)
           deriving (Show)
