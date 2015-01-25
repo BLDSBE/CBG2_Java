@@ -12,6 +12,7 @@ type LookUp = Type -> (Env,Env)		-- A function type that allows a direkt lookup 
 
 {- TODO:
 	- methods from Object
+	- errors
 -}
 
 --Program-------------------------------------------------------------------------------------------
@@ -113,6 +114,7 @@ getTypedStatement lookUp env (If(e, ifS, Nothing)) = (If(getTypedExpression (loo
 																Nothing), env)
 getTypedStatement lookUp env (StmtExprStmt(se)) = 
 												(StmtExprStmt(getTypedStatementExpr (lookUp) env se), env)
+--getTypedStatement lookUp env s = (s, env) --error ("Unknown statement: " ++ s)
 ----------------------------------------------------------------------------------------------------
 
 
@@ -120,15 +122,14 @@ getTypedStatement lookUp env (StmtExprStmt(se)) =
 --StatementExpressions------------------------------------------------------------------------------
 getTypedStatementExpr :: LookUp -> Env -> StmtExpr -> StmtExpr
 getTypedStatementExpr lookUp env (Assign(var, e)) = let te = getTypedExpression (lookUp) env e in
-																		let tvar = getTypedExpression (lookUp) env var in
-														TypedStmtExpr(
-															Assign(tvar, te),
-															--getTypeFromExpr te) -- TODO: check for errors
-															getTypeFromExpr tvar)
-															--(env Map.! name)) -- lookup the type by variable name
-																					-- and don't take the type from "te"
-																					-- to get the correct type if rvalue
-																					-- is "null"
+																	 let tvar = getTypedExpression (lookUp) env var in
+																	 let typeExpr = getTypeFromExpr te in
+																	 let typeVar = getTypeFromExpr tvar in
+																		if isSubType typeExpr typeVar 
+																		then TypedStmtExpr(Assign(tvar, te),
+																										getTypeFromExpr tvar)
+																		else error ("Type mismatch: cannot convert from " 
+																						++ typeExpr ++ " to " ++ typeVar)
 getTypedStatementExpr lookUp env (New(typ, es)) =
 											TypedStmtExpr(New(typ, getTypedExpressionList (lookUp) env es), typ)
 getTypedStatementExpr lookUp env (MethodCall(e,name,es)) = 
@@ -143,7 +144,7 @@ getTypedStatementExpr lookUp env (MethodCall(e,name,es)) =
 												MethodCall(te, name, getTypedExpressionList (lookUp) env es),
 												typ) -- return that type
 
-getTypedStatementExpr lookUp env se = se -- Should also never happen!
+getTypedStatementExpr lookUp env se = se --error ("Unknown ExprStmt: " ++ se)
 ----------------------------------------------------------------------------------------------------
 
 
@@ -169,13 +170,12 @@ getTypedExpression lookUp env (InstVar(e, name)) =
 											TypedExpr(InstVar(te, name), typ) -- return that type
 
 getTypedExpression lookUp env (Unary(name, e)) = let te = getTypedExpression (lookUp) env e in
-							-- Possible operators: ++,--,-,!,~,+: pass types
+							-- Possible operators: ++,--,-,!,~,+: pass types --TODO: errors
 													TypedExpr(
 														Unary(name, te),
 														getTypeFromExpr te)
 
 getTypedExpression lookUp env (Binary(name, e1, e2)) =
-							--TODO: Maybe check and compare types and throw errors if necessary
 									let te1 = getTypedExpression (lookUp) env e1 in
 										let te2 = getTypedExpression (lookUp) env e2 in
 											let t1 = getTypeFromExpr te1 in
@@ -193,7 +193,7 @@ getTypedExpression lookUp env ci@(ClassId(typ)) = TypedExpr(ci, typ)
 getTypedExpression lookUp env (StmtExprExpr(se)) = 
 									let tse = getTypedStatementExpr (lookUp) env se in
 										TypedExpr(StmtExprExpr(tse), getTypeFromStmtExpr tse)
-getTypedExpression lookUp env e = e -- should not happen!
+getTypedExpression lookUp env e = e --error ("Unknown Expression: " ++ e)
 
 -- <<,>>,>>>: lvalue
 -- *,/: "bigger" type
@@ -201,6 +201,7 @@ getTypedExpression lookUp env e = e -- should not happen!
 -- <,>,<=,>=,instanceof,==,!=: boolean
 -- &,|,^: lvalue, rvalue (either integer type or boolean)
 -- &&, ||: boolean
+-- TODO: errors
 getTypeByOperator :: String -> Type -> Type -> Type
 getTypeByOperator op t1 t2 = 
 	if 	  op == shiftL 			then t1
@@ -220,19 +221,29 @@ getTypeByOperator op t1 t2 =
 	else if op == equals 			then booleanType
 	else if op == unequal 			then booleanType
 	
-	else if op == and1 				then matchTypes t1 t2
-	else if op == or1 				then matchTypes t1 t2
-	else if op == xor 				then matchTypes t1 t2
+	else if op == and1 				then matchTypes op t1 t2
+	else if op == or1 				then matchTypes op t1 t2
+	else if op == xor 				then matchTypes op t1 t2
 
 	else if op == and2 				then booleanType
 	else if op == or2 				then booleanType
-	else "ERROR: Unknown operator"
+	else error ("Unknown operator: " ++ op)
 
 greaterType :: Type -> Type -> Type
-greaterType t1 t2 = intType --TODO: errors
+greaterType t1 t2 = intType
 
-matchTypes :: Type -> Type -> Type
-matchTypes t1 t2 = t1 --TODO: check for equality and throw errors if necessary
+matchTypes :: String -> Type -> Type -> Type
+matchTypes op t1 t2 = if t1 == t2 then t1 
+						 else error ("Operator \"" ++ op ++ "\" undefined for " ++ t1 ++ " and " ++ t2)
+						 
+isSubType :: Type -> Type -> Bool
+-- Returns true iff t1 is castable to t2
+isSubType t1 t2 = if 		t2 == intType 		then t1 == intType || t1 == charType
+						else if	t2 == charType		then t1 == charType
+						else if	t2 == stringType	then t1 == stringType || t1 == charType || t1 == nullType
+						else if	t2 == booleanType	then t1 == booleanType
+						else if 	t2 == objectType	then t1 /= intType && t1 /= charType && t1 /= booleanType
+						else 									  t2 == t1
 ----------------------------------------------------------------------------------------------------
 
 
@@ -357,6 +368,10 @@ testStatic = [
 		Class("B", [], [ Method(voidType, "callStaticMethod", [], Block([
 								StmtExprStmt(MethodCall(ClassId("A"), "staticMethod", [])) ]), True) ])
 	]
+
+testError = Block([
+						LocalVarDecl(objectType, "x"),
+						StmtExprStmt(Assign(LocalOrFieldVar("x"), ClassId("B") ))])
 
 main :: IO()
 main = --print $ typecheck testExample
