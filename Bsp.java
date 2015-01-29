@@ -5,22 +5,31 @@
 public class Bsp {
 
     int n = 0;
-    
+    boolean b1 = false;
+    char c1 = 'c';
+    float f1 = 0.1f;
+    double d1 = 0.1;
+
     /**
      * @param args the command line arguments
      */
     public static void main(String[] args) {
-        int i = 0;
+        int i = 50000;
         boolean a = true;
-        char b = 't';
+        boolean b = 0 < 1;
+        char c = 't';
         
         if (a)
             i = 5;
         else
-            b = 'f';
-        
+            c = 'f';
         //System.out.println("bool war "+ b +", deshalb ist i = "+i);
         
+    }
+
+    public void a(Integer[] b){
+
+
     }
     
 }
