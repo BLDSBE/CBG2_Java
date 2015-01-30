@@ -67,15 +67,14 @@ getConstantsHTH (l:xl) s = Map.union t (getConstantsHTH xl (Map.size t))
 
 getConstantsHTHH :: Stmt -> Int -> Map String Int
 getConstantsHTHH (Block([]))                    s = Map.empty 
-getConstantsHTHH (Block(stmt:stmts))            s = Map.union t (getConstantsHTH stmts (Map.size t))
-	where t = getConstantsHTHH stmt s              
-getConstantsHTHH (Return(TypedExpr(expr, typ))) s = Map.empty
+getConstantsHTHH (Block(stmt:stmts))            s = Map.union t (getConstantsHTH stmts (Map.size t)) where t = getConstantsHTHH stmt s              
+getConstantsHTHH (Return(TypedExpr(expr, typ))) s = getConstantsHTHHE expr s
 getConstantsHTHH (Return(_))                    _ = Map.empty
 getConstantsHTHH ReturnV                        s = Map.empty
-getConstantsHTHH (While(expr, stmt))            s = Map.empty
+getConstantsHTHH (While(expr, stmt))            s = getConstantsHTHHE expr s
 getConstantsHTHH (LocalVarDecl(typ, str))       s = Map.empty
 getConstantsHTHH (If(expr, stmt, mbStmt))       s = getConstantsHTHHE expr s
-getConstantsHTHH (StmtExprStmt(stmtEpxr))       s = Map.empty
+getConstantsHTHH (StmtExprStmt(stmtExpr))       s = getConstantsHTHHS stmtExpr s
 
 getConstantsHTHHE :: Expr -> Int -> Map String Int
 getConstantsHTHHE This                         s = Map.empty
@@ -83,19 +82,19 @@ getConstantsHTHHE Super                        s = Map.empty
 getConstantsHTHHE (LocalOrFieldVar v)          s = Map.fromList [(v, s)]
 getConstantsHTHHE (InstVar (expr, str))        s = getConstantsHTHHE expr s
 getConstantsHTHHE (Unary (str, expr))          s = getConstantsHTHHE expr s
-getConstantsHTHHE (Binary (str, expr1, expr2)) s = Map.union t (getConstantsHTHHE (Map.size t)) where t = getConstantsHTHHE expr1 s
+getConstantsHTHHE (Binary (str, expr1, expr2)) s = Map.union t (getConstantsHTHHE expr2 (Map.size t)) where t = getConstantsHTHHE expr1 s
 getConstantsHTHHE (Integer i)                  s = Map.fromList [(show i, s)]
 getConstantsHTHHE (Bool b)                     s = Map.empty
 getConstantsHTHHE (Char c)                     s = Map.fromList [(show c, s)]
 getConstantsHTHHE (String s1)                  s = Map.fromList [(s1, s)]
 getConstantsHTHHE (Jnull)                      s = Map.empty
 getConstantsHTHHE (StmtExprExpr(stmtExpr))     s = getConstantsHTHHS stmtExpr s
-getConstantsHTHHE (TypedExpr(expr, typ))       s = getConstantsHTHHE expr
+getConstantsHTHHE (TypedExpr(expr, typ))       s = getConstantsHTHHE expr s
 
-getConstantsHTHHS :: StmtExprStmt -> Int -> Map String Int
-getConstantsHTHHS (Assign(e1, e2)) s = Map.union t $ getConstantsHTHHE e2 $ Map.size t where t = getConstantsHTHHE s
+getConstantsHTHHS :: StmtExpr -> Int -> Map String Int
+getConstantsHTHHS (Assign(e1, e2)) s = Map.union t $ getConstantsHTHHE e2 $ Map.size t where t = getConstantsHTHHE e1 s
 getConstantsHTHHS (New(typ, exprs)) s = Map.empty
-getConstantsHTHHS (MethodCall(expr, str, exprs) s = Map.empty 
+getConstantsHTHHS (MethodCall(expr, str, exprs)) s = Map.empty 
 getConstantsHTHHS (TypedStmtExpr(stmtExpr, typ)) s = Map.empty
 
 
@@ -304,4 +303,5 @@ main = do let example = Class("Bsp", [FieldDecl("I", "n"), FieldDecl("Z", "b1"),
                             ReturnV]), True)
                           ])
               --StmtExprStmt(MethodCall(    System.out, "println", [] ))
+          putStrLn $ Pr.ppShow $ getConstantsHT (getMethodDeclsFromClass example) 0
           putStrLn $ Pr.ppShow $ codegen example
