@@ -1,4 +1,4 @@
-module Typechek where
+module Typecheck where
 import AbsSyn
 import Constants
 import Data.Map (Map)
@@ -170,11 +170,16 @@ getTypedExpression lookUp env (InstVar(e, name)) =
 														(fields Map.! name) ) in
 											TypedExpr(InstVar(te, name), typ) -- return that type
 
-getTypedExpression lookUp env (Unary(name, e)) = let te = getTypedExpression (lookUp) env e in
+getTypedExpression lookUp env (Unary(op, e)) = let te = getTypedExpression (lookUp) env e in
 							-- Possible operators: ++,--,-,!,~,+: pass types --TODO: errors
-													TypedExpr(
-														Unary(name, te),
-														getTypeFromExpr te)
+																	let typ = getTypeFromExpr te in
+																		if 	isNumberOperator op && isNumberType typ 
+																			|| isBooleanOperator op && typ == booleanType 
+																			|| op == bitwiseNot && isIntegerType typ then
+																			TypedExpr(Unary(op, te), typ)
+																		else
+																			error ("The operator is undefined for the argument"
+																				++ " type " ++ typ)
 
 getTypedExpression lookUp env (Binary(name, e1, e2)) =
 									let te1 = getTypedExpression (lookUp) env e1 in
@@ -245,6 +250,19 @@ isSubType t1 t2 = if 		t2 == intType 		then t1 == intType || t1 == charType
 						else if	t2 == booleanType	then t1 == booleanType
 						else if 	t2 == objectType	then t1 /= intType && t1 /= charType && t1 /= booleanType
 						else 									  t2 == t1
+
+isNumberType :: Type -> Bool
+isNumberType typ = typ == charType || typ == intType
+
+isNumberOperator :: String -> Bool
+isNumberOperator op = op == plus || op == minus || op == plusPlus || op == minusMinus
+											|| op == multiplication || op == division || op == modulo
+
+isBooleanOperator :: String -> Bool
+isBooleanOperator op = op == booleanNot -- TODO: continue
+
+isIntegerType :: Type -> Bool
+isIntegerType typ = typ == intType || typ == charType
 ----------------------------------------------------------------------------------------------------
 
 
