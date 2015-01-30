@@ -3,6 +3,7 @@ import AbsSyn
 import Constants
 import Data.Map (Map)
 import qualified Data.Map as Map
+import qualified Text.Show.Pretty as Pr
 
 type Env = Map String Type
 type ClassMap = Map Type (Env, Env) -- A map className => (Fields, Methods)
@@ -375,7 +376,7 @@ testError = Block([
 
 main :: IO()
 main = --print $ typecheck testExample
-	print $ typecheck testInstVarsAndAssign
+	putStrLn $ Pr.ppShow $ typecheck testInstVarsAndAssign
 	--print $ getTypedStatement (\ a -> (Map.empty, Map.empty)) (Map.fromList [("j", intType)]) testBlock
 	--print $ getTypedMethodBody (\ a -> (Map.empty, Map.empty)) Map.empty testBlock2
 	--print $ getTypedMethods (\ a -> (Map.empty, Map.empty)) Map.empty [test]
