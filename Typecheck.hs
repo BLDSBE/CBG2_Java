@@ -13,7 +13,6 @@ type LookUp = Type -> (Env,Env)		-- A function type that allows a direkt lookup 
 
 {- TODO:
 	- methods from Object
-	- errors
 -}
 
 --Program-------------------------------------------------------------------------------------------
@@ -28,7 +27,7 @@ getClassMap [] = Map.empty
 getTypedClassList :: ClassMap -> Prg -> Prg
 getTypedClassList cm (c : tail) = 
 	getTypedClass
-		((\ m t -> (m Map.! t)) cm) -- extract lookUp function
+		(lookUpClass cm) -- extract lookUp function
 		c 
 	: (getTypedClassList cm tail)
 getTypedClassList cm [] = []
@@ -140,7 +139,7 @@ getTypedStatementExpr lookUp env (MethodCall(e,name,es)) =
 													-- find the associated class
 													lookUp (getTypeFromExpr te) in
 														-- and lookup the type of the method
-														(methods Map.! name) )		in
+														lookUpMethod methods name )		in
 											TypedStmtExpr(
 												MethodCall(te, name, getTypedExpressionList (lookUp) env es),
 												typ) -- return that type
@@ -157,9 +156,9 @@ getTypedExpressionList lookUp env (e : tail) =
 getTypedExpressionList lookUp env [] = []
 
 getTypedExpression :: LookUp -> Env -> Expr -> Expr
-getTypedExpression lookUp env this@(This) = TypedExpr(this, (env Map.! thisString))
-getTypedExpression lookUp env super@(Super) = TypedExpr(super, (env Map.! superString))
-getTypedExpression lookUp env lofv@(LocalOrFieldVar(name)) = TypedExpr(lofv, (env Map.! name))
+getTypedExpression lookUp env this@(This) = TypedExpr(this, lookUpVariable env thisString)
+getTypedExpression lookUp env super@(Super) = TypedExpr(super, lookUpVariable env superString)
+getTypedExpression lookUp env lofv@(LocalOrFieldVar(name)) = TypedExpr(lofv, lookUpVariable env name)
 getTypedExpression lookUp env (InstVar(e, name)) = 
 								let te = getTypedExpression (lookUp) env e in -- type the expression 
 											-- (which returns the class where the variable is declared)
@@ -167,11 +166,10 @@ getTypedExpression lookUp env (InstVar(e, name)) =
 													-- find the associated class in the lookUp function
 													lookUp (getTypeFromExpr te) in
 														-- and lookup the type
-														(fields Map.! name) ) in
+														lookUpVariable fields name ) in
 											TypedExpr(InstVar(te, name), typ) -- return that type
 
 getTypedExpression lookUp env (Unary(op, e)) = let te = getTypedExpression (lookUp) env e in
-							-- Possible operators: ++,--,-,!,~,+: pass types --TODO: errors
 																	let typ = getTypeFromExpr te in
 																		if 	isNumberOperator op && isNumberType typ 
 																			|| isBooleanOperator op && typ == booleanType 
@@ -210,37 +208,45 @@ getTypedExpression lookUp env e = e --error ("Unknown Expression: " ++ e)
 -- TODO: errors
 getTypeByOperator :: String -> Type -> Type -> Type
 getTypeByOperator op t1 t2 = 
-	if 	  op == shiftL 			then t1
-	else if op == shiftR2 			then t1
-	else if op == shiftR3 			then t1
+	if 	  op == shiftL 			then checkShiftTypes op t1 t2
+	else if op == shiftR2 			then checkShiftTypes op t1 t2
+	else if op == shiftR3 			then checkShiftTypes op t1 t2
 	
-	else if op == multiplication 	then greaterType t1 t2
-	else if op == division 			then greaterType t1 t2
+	else if op == multiplication 	then checkArithmeticTypes op t1 t2
+	else if op == division 			then checkArithmeticTypes op t1 t2
+	else if op == plus				then checkArithmeticTypes op t1 t2
+	else if op == minus				then checkArithmeticTypes op t1 t2
 	
-	else if op == modulo 			then intType
+	else if op == modulo 			then if isIntegerType t1 && isIntegerType t2 then intType
+												  else operatorError op t1 t2
 	
-	else if op == lessThan 			then booleanType
-	else if op == greaterThan 		then booleanType
-	else if op == lessOrEqual 		then booleanType
-	else if op == greaterOrEqual 	then booleanType
-	else if op == instanceOf 		then booleanType
-	else if op == equals 			then booleanType
-	else if op == unequal 			then booleanType
+	else if op == lessThan 			then checkNumberTypes op t1 t2
+	else if op == greaterThan 		then checkNumberTypes op t1 t2
+	else if op == lessOrEqual 		then checkNumberTypes op t1 t2
+	else if op == greaterOrEqual 	then checkNumberTypes op t1 t2
 	
+	else if op == equals 			then checkEqualsOp op t1 t2
+	else if op == unequal 			then checkEqualsOp op t1 t2
+	
+	else if op == instanceOf 		then if not (isPrimitiveType t1 || isPrimitiveType t2)
+												  then booleanType
+												  else operatorError op t1 t2
+
 	else if op == and1 				then matchTypes op t1 t2
 	else if op == or1 				then matchTypes op t1 t2
 	else if op == xor 				then matchTypes op t1 t2
 
-	else if op == and2 				then booleanType
-	else if op == or2 				then booleanType
+	else if op == and2 				then checkBooleanOp op t1 t2
+	else if op == or2 				then checkBooleanOp op t1 t2
 	else error ("Unknown operator: " ++ op)
 
 greaterType :: Type -> Type -> Type
 greaterType t1 t2 = intType
 
 matchTypes :: String -> Type -> Type -> Type
-matchTypes op t1 t2 = if t1 == t2 then t1 
-						 else error ("Operator \"" ++ op ++ "\" undefined for " ++ t1 ++ " and " ++ t2)
+matchTypes op t1 t2 = if t1 == booleanType && t2 == booleanType then t1
+							 else if isIntegerType t1 && isIntegerType t2 then intType
+						 	 else operatorError op t1 t2
 						 
 isSubType :: Type -> Type -> Bool
 -- Returns true iff t1 is castable to t2
@@ -259,10 +265,60 @@ isNumberOperator op = op == plus || op == minus || op == plusPlus || op == minus
 											|| op == multiplication || op == division || op == modulo
 
 isBooleanOperator :: String -> Bool
-isBooleanOperator op = op == booleanNot -- TODO: continue
+isBooleanOperator op = op == booleanNot || op == instanceOf || op == equals || op == unequal
+									|| op == and1 || op == and2 || op == or1 || op == or2 || op == xor
+
+checkShiftTypes :: String -> Type -> Type -> Type
+checkShiftTypes op t1 t2 = if isIntegerType t1 && isIntegerType t2 then t1
+								  else operatorError op t1 t2
+
+checkArithmeticTypes :: String -> Type -> Type -> Type
+checkArithmeticTypes op t1 t2 = if isNumberType t1 && isNumberType t2 then greaterType t1 t2
+										  else operatorError op t1 t2
+
+checkNumberTypes :: String -> Type -> Type -> Type
+checkNumberTypes op t1 t2 = if isNumberType t1 && isNumberType t2 then booleanType
+									 else operatorError op t1 t2
+
+checkEqualsOp :: String -> Type -> Type -> Type
+checkEqualsOp op t1 t2 = if (isPrimitiveType t1 && isPrimitiveType t2
+										&& (isSubType t1 t2 || isSubType t2 t1))
+									|| not (isPrimitiveType t1 || isPrimitiveType t2)
+								 then booleanType
+								 else operatorError op t1 t2
+
+checkBooleanOp :: String -> Type -> Type -> Type
+checkBooleanOp op t1 t2 = if t1 == booleanType && t2 == booleanType then t1
+								  else operatorError op t1 t2
 
 isIntegerType :: Type -> Bool
 isIntegerType typ = typ == intType || typ == charType
+
+isPrimitiveType :: Type -> Bool
+isPrimitiveType t = t == booleanType || isNumberType t
+----------------------------------------------------------------------------------------------------
+
+--LookUps-------------------------------------------------------------------------------------------
+lookUpVariable :: Env -> String -> Type
+lookUpVariable env var = case Map.lookup var env of
+									Just(typ) -> typ
+									Nothing	 -> error (var ++ " cannot be resolved to a variable")
+									
+lookUpClass :: ClassMap -> LookUp
+lookUpClass cm typ = case Map.lookup typ cm of
+								Just(c)	-> c
+								Nothing	-> error (typ ++ " cannot be resolved to a type")
+								
+lookUpMethod :: Env -> String -> Type
+lookUpMethod env method = case Map.lookup method env of
+									Just(typ) -> typ
+									Nothing	 -> error (method ++ " cannot be resolved to a method")
+
+----------------------------------------------------------------------------------------------------
+
+--Errors--------------------------------------------------------------------------------------------
+operatorError :: String -> Type -> Type -> Type
+operatorError op t1 t2 = error ("Operator \"" ++ op ++ "\" undefined for " ++ t1 ++ " and " ++ t2)
 ----------------------------------------------------------------------------------------------------
 
 
