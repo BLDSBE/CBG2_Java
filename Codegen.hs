@@ -1,7 +1,7 @@
 module Codegen where
 import ClassFormat
 import AbsSyn
-import Typechek
+import Typecheck hiding (main)
 import Data.List.Split
 import Data.List
 import qualified Text.Show.Pretty as Pr
@@ -96,8 +96,7 @@ getConstantsHTHHS :: StmtExpr -> Int -> Map String Int
 getConstantsHTHHS (Assign(e1, e2)) s = Map.union t $ getConstantsHTHHE e2 $ (s + (Map.size t)) where t = getConstantsHTHHE e1 s
 getConstantsHTHHS (New(typ, exprs)) s = Map.empty
 getConstantsHTHHS (MethodCall(expr, str, exprs)) s = Map.empty 
-getConstantsHTHHS (TypedStmtExpr(stmtExpr, typ)) s = Map.empty
-
+getConstantsHTHHS (TypedStmtExpr(stmtExpr, typ)) s = Map.fromList $ map (\(s, i) -> ((typ ++ ":" ++ s), i)) $ Map.toList $ getConstantsHTHHS stmtExpr s
 
 
 addNameAndType :: (String, String) -> Map String Int -> Map String Int
@@ -143,7 +142,10 @@ constantsHTToCP_Infos :: [(String, Int)] -> CP_Infos
 constantsHTToCP_Infos = map constantsHTEntryToCP_Info
 
 constantsHTEntryToCP_Info :: (String, Int) -> CP_Info
-constantsHTEntryToCP_Info (s, i) = String_Info{tag_cp = TagClass, index_cp = i, desc = s}
+constantsHTEntryToCP_Info (s, i) = let l = reverse $ splitOn ":" s in
+  case l of (content:typ:rest) -> case typ of 
+		"I" -> Integer_Info { tag_cp = TagInteger, numi_cp = i, desc = typ ++ ":" ++ content } 
+		_   -> String_Info  { tag_cp = TagString, index_cp = i, desc = typ ++ ":" ++ content }
 
 
 get_CP_Infos :: Class -> CP_Infos
@@ -218,8 +220,8 @@ get_Method_Infos c@(Class(_, _, methodDecls)) = let ht = get_CP_Map c in
                   tam_len_attr = -1,
                   len_stack_attr = -1,
                   len_local_attr = -1,
-                  tam_code_attr = length $ compileStmt code ht,
-                  array_code_attr = compileStmt code ht,
+                  tam_code_attr = 0, --length $ compileStmt code ht,
+                  array_code_attr = [], --compileStmt code ht,
                   tam_ex_attr = 0,
                   array_ex_attr = [],
                   tam_atrr_attr = 0,
@@ -297,24 +299,26 @@ codegen c@(Class(typ, fieldDecls, methodDecls)) = ClassFile {
 
 
 main :: IO()
-main = do let example = typecheck $ Class("Bsp", [FieldDecl("I", "n"), FieldDecl("Z", "b1"), FieldDecl("C", "c1"), FieldDecl("F", "f1"), FieldDecl("D", "d1")], [
-                          Method("V", "<init>", [], Block([
-                            StmtExprStmt(Assign(LocalOrFieldVar("n"), TypedExpr(Integer 0, "I")))
+main = do let example = head $ typecheck $ [Class ("Bsp", [FieldDecl("I", "n"), FieldDecl("Z", "b1"), FieldDecl("C", "c1"), FieldDecl("F", "f1"), FieldDecl("D", "d1")], [
+                          Method ("V", "<init>", [], Block([
+                            StmtExprStmt $ Assign (LocalOrFieldVar "n", Integer 0)
                           ]), False),
-                          Method("V", "main", [("[Ljava/lang/String;", "args")], Block([
+                          Method ("V", "main", [("[Ljava/lang/String;", "args")], Block ([
                             LocalVarDecl("I", "i"),
-                            StmtExprStmt(Assign(LocalOrFieldVar("i"), TypedExpr(Integer 50000, "I"))),
-                            LocalVarDecl("boolean", "a"),
-                            StmtExprStmt(Assign(LocalOrFieldVar("a"), TypedExpr(Bool True, "boolean"))),
-                            LocalVarDecl("char", "b"),
-                            StmtExprStmt(Assign(LocalOrFieldVar("b"), TypedExpr(Char('t'), "char"))),
-                            If(LocalOrFieldVar("a"), 
-                              StmtExprStmt(Assign(LocalOrFieldVar("a"), Integer 5)), 
-                              Just (StmtExprStmt(Assign(LocalOrFieldVar("b"), TypedExpr(Char('f'), "char"))))
+                            StmtExprStmt $ Assign (LocalOrFieldVar "i", Integer 50000),
+                            LocalVarDecl ("Z", "a"),
+                            StmtExprStmt $ Assign (LocalOrFieldVar "a", Bool True),
+                            LocalVarDecl ("C", "b"),
+                            StmtExprStmt $ Assign (LocalOrFieldVar "b", Char 't'),
+                            If (LocalOrFieldVar "a", 
+                              StmtExprStmt $ Assign (LocalOrFieldVar "i", Integer 5), 
+                              Just $ StmtExprStmt $ Assign $ (LocalOrFieldVar "b", Char 'f')
                             ),
-                            ReturnV]), True)
-                          ])
+                            ReturnV
+                          ]), True)
+                        ])]
               --StmtExprStmt(MethodCall(    System.out, "println", [] ))
+          --putStrLn $ Pr.ppShow $ example
           putStrLn $ Pr.ppShow $ getConstantsHT (getMethodDeclsFromClass example) 0
           putStrLn $ Pr.ppShow $ getConstantsCpEntries example
           putStrLn $ Pr.ppShow $ codegen example
