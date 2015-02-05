@@ -1,8 +1,10 @@
 module TestSuite where
 
-import Typecheck
+import Typecheck hiding (main)
 import AbsSyn
 import Constants
+import Codegen hiding (main)
+import qualified Text.Show.Pretty as Pr
 
 ifClass = [Class("IfTest",
             [FieldDecl("I", "i"), FieldDecl("I", "j")],
@@ -39,3 +41,17 @@ compareClass = [Class("CompareTest",
                             Return (LocalOrFieldVar("a"))
                         ]), True)]
                     )]
+
+main :: IO()
+main = do
+    putStrLn $ Pr.ppShow $ typecheck ifClass
+    putStrLn $ Pr.ppShow $ getConstantsHT (getMethodDeclsFromClass $ head $ typecheck ifClass) 0
+    putStrLn $ Pr.ppShow $ getConstantsCpEntries $ head $ typecheck ifClass
+    putStrLn $ Pr.ppShow $ get_CP_Map $ head $ typecheck ifClass
+    putStrLn $ Pr.ppShow $ get_CP_Infos $ head $ typecheck ifClass
+    --putStrLn $ Pr.ppShow $ codegen $ head $ typecheck ifClass
+    putStrLn $ Pr.ppShow $ compareClass
+    --putStrLn $ Pr.ppShow $ codegen $ head $ typecheck compareClass
+    putStrLn $ Pr.ppShow $ whileClass
+    --putStrLn $ Pr.ppShow $ codegen $ head $ typecheck whileClass
+    

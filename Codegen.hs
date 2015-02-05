@@ -79,13 +79,17 @@ getConstantsHTHH (Return(_))                    _ = Map.empty
 getConstantsHTHH ReturnV                        s = Map.empty
 getConstantsHTHH (While(expr, stmt))            s = getConstantsHTHHE expr s
 getConstantsHTHH (LocalVarDecl(typ, str))       s = Map.empty
-getConstantsHTHH (If(expr, stmt, mbStmt))       s = getConstantsHTHHE expr s
+getConstantsHTHH (If(expr, stmt, Just(stmtElse))) s = Map.union t1 t2 where 
+  t1 = getConstantsHTHH stmt s
+  t2 = getConstantsHTHH stmtElse (Map.size t1)
+getConstantsHTHH (If(expr, stmt, Nothing))      s = getConstantsHTHH stmt s
 getConstantsHTHH (StmtExprStmt(stmtExpr))       s = getConstantsHTHHS stmtExpr s
 
 getConstantsHTHHE :: Expr -> Int -> Map String Int
 getConstantsHTHHE This                         s = Map.empty
 getConstantsHTHHE Super                        s = Map.empty
-getConstantsHTHHE (LocalOrFieldVar v)          s = Map.fromList [("var:" ++ v, s)]
+getConstantsHTHHE (LocalOrFieldVar v)          s = Map.empty
+--getConstantsHTHHE (LocalOrFieldVar v)          s = Map.fromList [("var:" ++ v, s)]
 getConstantsHTHHE (InstVar (expr, str))        s = getConstantsHTHHE expr s
 getConstantsHTHHE (Unary (str, expr))          s = getConstantsHTHHE expr s
 getConstantsHTHHE (Binary (str, expr1, expr2)) s = Map.union t (getConstantsHTHHE expr2 (s + (Map.size t))) where t = getConstantsHTHHE expr1 s
@@ -98,7 +102,7 @@ getConstantsHTHHE (StmtExprExpr(stmtExpr))     s = getConstantsHTHHS stmtExpr s
 getConstantsHTHHE (TypedExpr(expr, typ))       s = Map.fromList $ map (\(s, i) -> ((typ ++ ":" ++ s), i)) $ Map.toList $ getConstantsHTHHE expr s
 
 getConstantsHTHHS :: StmtExpr -> Int -> Map String Int
-getConstantsHTHHS (Assign(e1, e2)) s = Map.union t $ getConstantsHTHHE e2 $ (s + (Map.size t)) where t = getConstantsHTHHE e1 s
+getConstantsHTHHS (Assign(e1, e2)) s = getConstantsHTHHE e2 s
 getConstantsHTHHS (New(typ, exprs)) s = Map.empty
 getConstantsHTHHS (MethodCall(expr, str, exprs)) s = Map.empty 
 getConstantsHTHHS (TypedStmtExpr(stmtExpr, typ)) s = Map.fromList $ map (\(s, i) -> ((typ ++ ":" ++ s), i)) $ Map.toList $ getConstantsHTHHS stmtExpr s
@@ -183,16 +187,16 @@ get_CP_Infos c@(Class(typ, fieldDecls, methodDecls)) = do
       desc = "java/lang/Object"
     }]
   let cpStringsClassesFields = cpStringsClasses ++ [ FieldRef_Info {
-          tag_cp = TagFieldRef,
-          index_name_cp = cpht Map.! typ,
-          index_nameandtype_cp = natCpht Map.! (fName ++ ":" ++ fTyp),
-          desc = typ ++ "." ++ fName ++ ":" ++ fTyp
-          } | FieldDecl(fTyp, fName) <- fieldDecls]
+    tag_cp = TagFieldRef,
+    index_name_cp = cpht Map.! typ,
+    index_nameandtype_cp = natCpht Map.! (fName ++ ":" ++ fTyp),
+    desc = typ ++ "." ++ fName ++ ":" ++ fTyp
+    } | FieldDecl(fTyp, fName) <- fieldDecls]
   let cpStringsClassesFieldsMethods = cpStringsClassesFields ++ [MethodRef_Info {
-          tag_cp = TagMethodRef,
-          index_name_cp = cpht Map.! typ,
-          index_nameandtype_cp = natCpht Map.! (mName ++ ":" ++ (getMethodType mTyp mArgs)),
-          desc = typ ++ "." ++ mName ++ ":" ++ mTyp
+    tag_cp = TagMethodRef,
+    index_name_cp = cpht Map.! typ,
+    index_nameandtype_cp = natCpht Map.! (mName ++ ":" ++ (getMethodType mTyp mArgs)),
+    desc = typ ++ "." ++ mName ++ ":" ++ mTyp
   } | Method(mTyp, mName, mArgs, _, _) <- methodDecls]
   cpStringsClassesFieldsMethods ++ (getConstantsCpEntries c)
 
@@ -211,13 +215,13 @@ getFieldAccessFlags _ _ = AccessFlags [1]
 
 get_Field_Infos :: Class -> Field_Infos
 get_Field_Infos c@(Class(_, fieldDecls, _)) = let ht = getUtf8HashTable c in 
-        [Field_Info {
-        af_fi = getFieldAccessFlags c fr,
-        index_name_fi = ht Map.! name,
-        index_descr_fi = ht Map.! typ,
-        tam_fi = -1,
-        array_attr_fi = []
-} | fr@(FieldDecl(typ, name)) <- fieldDecls]
+  [ Field_Info {
+    af_fi = getFieldAccessFlags c fr,
+    index_name_fi = ht Map.! name,
+    index_descr_fi = ht Map.! typ,
+    tam_fi = -1,
+    array_attr_fi = []
+  } | fr@(FieldDecl(typ, name)) <- fieldDecls]
 
 getMethodAccessFlags :: Class -> MethodDecl -> AccessFlags
 getMethodAccessFlags _ (Method (_, _, _, _, False)) = AccessFlags [1]  
@@ -225,24 +229,24 @@ getMethodAccessFlags _ (Method (_, _, _, _, True)) = AccessFlags [1, 8]
 
 get_Method_Infos :: Class -> Method_Infos
 get_Method_Infos c@(Class(_, _, methodDecls)) = let ht = get_CP_Map c in 
-        [ Method_Info {        
-          af_mi = getMethodAccessFlags c m,
-          index_name_mi = ht Map.! name,
-          index_descr_mi = ht Map.! (getMethodType typ args),
-          tam_mi = 1,
-          array_attr_mi = [ AttributeCode {
-                  index_name_attr = ht Map.! name,
-                  tam_len_attr = -1,
-                  len_stack_attr = -1,
-                  len_local_attr = -1,
-                  tam_code_attr = length $ compiledCode,
-                  array_code_attr = compiledCode,
-                  tam_ex_attr = 0,
-                  array_ex_attr = [],
-                  tam_atrr_attr = 0,
-                  array_attr_attr = []
-          }] 
-}| m@(Method(typ, name, args, code, _)) <- methodDecls, let (compiledCode, locals) = compileStmt code ht Map.empty]
+  [ Method_Info {        
+    af_mi = getMethodAccessFlags c m,
+    index_name_mi = ht Map.! name,
+    index_descr_mi = ht Map.! (getMethodType typ args),
+    tam_mi = 1,
+    array_attr_mi = [ AttributeCode {
+      index_name_attr = ht Map.! name,
+      tam_len_attr = -1,
+      len_stack_attr = stackHeight,
+      len_local_attr = Map.size locals,
+      tam_code_attr = length $ compiledCode,
+      array_code_attr = compiledCode,
+      tam_ex_attr = 0,
+      array_ex_attr = [],
+      tam_atrr_attr = 0,
+      array_attr_attr = []
+  }] 
+}| m@(Method(typ, name, args, code, _)) <- methodDecls, let (compiledCode, locals, stackHeight) = compileStmt code ht Map.empty 0]
 
 retTypLookup :: Map Type String
 retTypLookup = Map.fromList [("I", "i"), ("C", "c"), ("Z", "i"), 
@@ -250,63 +254,73 @@ retTypLookup = Map.fromList [("I", "i"), ("C", "c"), ("Z", "i"),
         ("D", "d"),
         ("F", "f")] 
 
-compileStmt :: Stmt -> Map String Int -> Map String Int -> ([Code], Map String Int)
-compileStmt (Block([]))                      ht locals = ([], locals)
-compileStmt (Block(stmt:stmts))              ht locals = 
-  let (code1, locals1) = compileStmt stmt ht locals
-      (code2, locals2) = compileStmt (Block stmts) ht locals1
-  in (code1 ++ code2, locals2)
-compileStmt (Return(TypedExpr(expr, typ)))  ht locals = let (code, locals1) = compileExpr expr ht locals in (code ++ [(retTypLookup Map.! typ) ++ "return;"], locals1)
-compileStmt ReturnV                          ht locals = (["return;"], locals)
-compileStmt (While(expr, stmt))              ht locals = 
-  let (code1, locals1) = compileExpr expr ht locals
-      (code2, locals2) = compileStmt stmt ht locals1 
-  in (["while"] ++ code1 ++ code2, locals2)
-compileStmt (LocalVarDecl(typ, str))         ht locals = (["LocalVarDecl: " ++ typ ++ ": " ++ str ++ ";"], Map.insert (str) (Map.size locals) locals)
-compileStmt (If(expr, stmt, mbStmt))         ht locals = 
-  let (code1, locals1) = compileExpr expr ht locals
-      (code2, locals2) = compileStmt stmt ht locals1 in
+compileStmt :: Stmt -> Map String Int -> Map String Int -> Int -> ([Code], Map String Int, Int)
+compileStmt (Block([]))                      ht locals sh = ([], locals, 0)
+compileStmt (Block(stmt:stmts))              ht locals sh = 
+  let (code1, locals1, sh1) = compileStmt stmt ht locals sh
+      (code2, locals2, sh2) = compileStmt (Block stmts) ht locals1 sh1
+  in (code1 ++ code2, locals2, max sh1 sh2)
+compileStmt (Return(TypedExpr(expr, typ)))   ht locals sh = let (code, locals1, sh1) = compileExpr expr ht locals sh in (code ++ [(retTypLookup Map.! typ) ++ "return;"], locals1, sh1)
+compileStmt ReturnV                          ht locals sh = (["return;"], locals, sh)
+compileStmt (While(expr, stmt))              ht locals sh = 
+  let (code1, locals1, sh1) = compileExpr expr ht locals sh
+      (code2, locals2, sh2) = compileStmt stmt ht locals1 sh1
+  in (["while"] ++ code1 ++ code2, locals2,  max sh1 sh2)
+compileStmt (LocalVarDecl(typ, str))         ht locals sh = ([], Map.insert (str) (Map.size locals) locals, sh)
+compileStmt (If(expr, stmt, mbStmt))         ht locals sh = 
+  let (codeIf,   locals1, sh1) = compileExpr expr ht locals  sh
+      (codeThen, locals2, sh2) = compileStmt stmt ht locals1 sh1 in
         case mbStmt of
-          Just stmtElse -> let (code3, locals3) = compileStmt stmtElse ht locals2 in
-            (["if"] ++ code1 ++ ["then"] ++ code2 ++ ["else"] ++ code3, locals3)
-          Nothing -> (["if"] ++ code1 ++ ["then"] ++ code2, locals2)
-compileStmt (StmtExprStmt(stmtExpr))         ht locals = compileStmtExpr stmtExpr ht locals
+          Just stmtElse -> let (codeElse, locals3, sh3) = compileStmt stmtElse ht locals2 sh2 in
+            -- ifeq: if stacktop == 0 jump ahead (length codeThen) instructions 
+            -- else: jump afterwards ahead length of elseblock
+            (codeIf ++ ["ifeq " ++ (show $ length codeThen) ++ ";"] ++ codeThen ++ ["iconst_0", "ifeq " ++ (show $ length codeElse)] ++ codeElse, locals3, max 1 $ max sh1 $ max sh2 sh3)
+          Nothing -> (codeIf ++ ["ifeq " ++ (show $ length codeThen) ++ ";"] ++ codeThen, locals2, max sh1 sh2)
+compileStmt (StmtExprStmt(stmtExpr))         ht locals sh = compileStmtExpr stmtExpr ht locals sh
 
-compileExpr :: Expr -> Map String Int -> Map String Int -> ([Code], Map String Int)
-compileExpr This                            ht locals = (["push this"], locals)
-compileExpr Super                            ht locals = (["push super"], locals)
-compileExpr (LocalOrFieldVar s)              ht locals = case (Map.lookup s locals) of
-  Just i ->  (["aload_" ++ (show i)], locals)
-  Nothing -> (["aload " ++ (show $ ht Map.! ("var:" ++ s))], locals)
-compileExpr (InstVar (expr, str))            ht locals = let (code, locals1) = compileExpr expr ht locals in (["instvar: "] ++ code ++ [", " ++ str], locals1)
-compileExpr (Unary (str, expr))              ht locals = let (code, locals1) = compileExpr expr ht locals in (["unary: " ++ str ++ ", "] ++ code, locals1)
-compileExpr (Binary (str, expr1, expr2))     ht locals = 
-  let (code1, locals1) = compileExpr expr1 ht locals
-      (code2, locals2) = compileExpr expr2 ht locals in
-        (["binary: " ++ str ++ ", "] ++ code1 ++ [", "] ++ code2, locals)
-compileExpr (Integer i)                      ht locals = (["push " ++ (show i) ++ ";"], locals)
-compileExpr (Bool b)                         ht locals  
-  | b == True  = (["iconst_1;"], locals)
-  | b == False = (["iconst_0;"], locals)
-compileExpr (Char c)                         ht locals = (["push " ++ [c] ++ ";"], locals)
-compileExpr (String s)                       ht locals = (["push " ++ s ++ ";"], locals)
-compileExpr (Jnull)                          ht locals = (["push null;"], locals)
-compileExpr (StmtExprExpr(stmtExpr))         ht locals = let (code, locals1) =compileStmtExpr stmtExpr ht locals in (code, locals1)
-compileExpr (TypedExpr(expr, typ))           ht locals = let (code, locals1) = compileExpr expr ht locals in (code ++ [typ], locals1)
+compileExpr :: Expr -> Map String Int -> Map String Int -> Int -> ([Code], Map String Int, Int)
+compileExpr This                             ht locals sh = (["push this"],  locals, sh + 1)
+compileExpr Super                            ht locals sh = (["push super"], locals, sh + 1)
+compileExpr (LocalOrFieldVar s)              ht locals sh = case (Map.lookup s locals) of
+  Just i ->  (["aload_" ++ (show i)], locals, sh + 1)
+  Nothing -> (["aload " ++ (show $ ht Map.! ("var:" ++ s))], locals, sh + 1)
+compileExpr (InstVar (expr, str))            ht locals sh = let (code, locals1, sh1) = compileExpr expr ht locals sh in (["instvar: "] ++ code ++ [", " ++ str], locals1, sh1)
+compileExpr (Unary (str, expr))              ht locals sh = let (code, locals1, sh1) = compileExpr expr ht locals sh in (["unary: " ++ str ++ ", "] ++ code, locals1, sh1)
+compileExpr (Binary (str, expr1, expr2))     ht locals sh = 
+  let (code1, locals1, sh1) = compileExpr expr1 ht locals sh
+      (code2, locals2, sh2) = compileExpr expr2 ht locals sh1 in
+        (["binary: " ++ str ++ ", "] ++ code1 ++ [", "] ++ code2, locals, max sh1 sh2)
+compileExpr (Integer i)                      ht locals sh = (["iload " ++ (show $ ht Map.! ("I:" ++ (show i))) ++ ";"], locals, sh + 1)
+compileExpr (Bool b)                         ht locals sh 
+  | b == True  = (["iconst_1;"], locals, sh + 1)
+  | b == False = (["iconst_0;"], locals, sh + 1)
+compileExpr (Char c)                         ht locals sh = (["iload " ++ (show $ ht Map.! ("C:" ++ (show c))) ++ ";"], locals, sh + 1)
+compileExpr (String s)                       ht locals sh = (["push " ++ s ++ ";"], locals, sh + 1)
+compileExpr (Jnull)                          ht locals sh = (["push null;"], locals, sh + 1)
+compileExpr (StmtExprExpr(stmtExpr))         ht locals sh = let (code, locals1, sh1) = compileStmtExpr stmtExpr ht locals sh in (code, locals1, sh1)
+compileExpr (TypedExpr(expr, typ))           ht locals sh = let (code, locals1, sh1) = compileExpr expr ht locals sh in (code, locals1, sh1)
 
-compileStmtExpr :: StmtExpr -> Map String Int -> Map String Int -> ([Code], Map String Int)
-compileStmtExpr (Assign(TypedExpr(LocalOrFieldVar var, typ1), TypedExpr(expr1, typ2))) ht locals = 
-  let (code1, locals1) = compileExpr expr1 ht locals in case (Map.lookup var locals) of
-    Just i  -> (code1 ++ ["->" ++ "istore_" ++ (show i)], locals1)
-    Nothing -> (code1 ++ ["->" ++ "istore " ++ (show $ ht Map.! ("var:" ++ var))], locals1)
+compileStmtExpr :: StmtExpr -> Map String Int -> Map String Int -> Int -> ([Code], Map String Int, Int)
+compileStmtExpr (Assign(TypedExpr(LocalOrFieldVar var, typ1), TypedExpr(expr1, typ2))) ht locals sh = 
+  let (code1, locals1, sh1) = compileExpr expr1 ht locals sh in case (Map.lookup var locals) of
+    Just i  -> (code1 ++ ["istore " ++ (show i)], locals1, sh1)
+    Nothing -> (["aload this"] ++ code1 ++ ["" ++ "putfield" ++ (show $ ht Map.! var) ++ ";"], locals1, sh1 + 1)
 
---compileStmtExpr (New(typ, exprs)) ht locals = 
---  (["new: " ++ typ ++ ": "] ++ (foldr (\a r -> a ++ r) [] [compileExpr e ht | e <- exprs]), locals)
+compileStmtExpr (New(typ, exprs)) ht locals sh = 
+  let (code1, locals1, sh1) = compileExprs exprs ht locals sh in 
+    (["new: " ++ typ ++ ":"] ++ code1, locals1, sh1)
 
 --compileStmtExpr (MethodCall(expr, str, exprs)) ht locals = let (code, locals1) = compileExpr expr ht locals in
 --  (["method: "] ++ code ++ [", " ++ str] ++ (foldr (\a r -> (a ++ r)) [] (map (\e -> compileExpr e ht locals) exprs)), locals)
 
-compileStmtExpr (TypedStmtExpr(stmtExpr, typ)) ht locals = let (code, locals1) = compileStmtExpr stmtExpr ht locals in (code ++ [": " ++ typ], locals1)
+compileStmtExpr (TypedStmtExpr(stmtExpr, typ)) ht locals sh = let (code, locals1, sh1) = compileStmtExpr stmtExpr ht locals sh in (code, locals1, sh1)
+
+compileExprs :: [Expr] -> Map String Int -> Map String Int -> Int -> ([Code], Map String Int, Int)
+compileExprs (e:es) ht locals sh = 
+  let (code1, locals1, sh1) = compileExpr e ht locals sh
+      (code2, locals2, sh2) = compileExprs es ht locals sh1 in
+        (code1 ++ code2, locals2, max sh1 sh2)
+compileExprs [] _ locals sh = ([], locals, sh)
 
 --TODO--
 get_Attribute_Infos :: Class -> Attribute_Infos
@@ -315,22 +329,22 @@ get_Attribute_Infos c = []
 
 codegen :: Class -> ClassFile
 codegen c@(Class(typ, fieldDecls, methodDecls)) = ClassFile {
-    magic = Magic,
-    minver = MinorVersion 0,
-    maxver = MajorVersion 52,
-    count_cp = length $ get_CP_Infos c,
-    array_cp = get_CP_Infos c,
-    acfg = get_ClassAccessFlags c,
-    this = ThisClass { index_th = cpHt Map.! typ },
-    super = SuperClass { index_sp = cpHt Map.! "java/lang/Object" },
-    count_interfaces = length $ get_Interfaces c,
-    array_interfaces = get_Interfaces c,
-    count_fields = length $ get_Field_Infos c,
-    array_fields = get_Field_Infos c,
-    count_methods = length $ get_Method_Infos c,
-    array_methods = get_Method_Infos c,
-    count_attributes = length $ get_Attribute_Infos c,
-    array_attributes = get_Attribute_Infos c
+  magic = Magic,
+  minver = MinorVersion 0,
+  maxver = MajorVersion 52,
+  count_cp = length $ get_CP_Infos c,
+  array_cp = get_CP_Infos c,
+  acfg = get_ClassAccessFlags c,
+  this = ThisClass { index_th = cpHt Map.! typ },
+  super = SuperClass { index_sp = cpHt Map.! "java/lang/Object" },
+  count_interfaces = length $ get_Interfaces c,
+  array_interfaces = get_Interfaces c,
+  count_fields = length $ get_Field_Infos c,
+  array_fields = get_Field_Infos c,
+  count_methods = length $ get_Method_Infos c,
+  array_methods = get_Method_Infos c,
+  count_attributes = length $ get_Attribute_Infos c,
+  array_attributes = get_Attribute_Infos c
 } where cpHt = get_CP_Map c
 
 
@@ -355,9 +369,8 @@ main = do
           ReturnV
         ]), True)
         ])]
-  --StmtExprStmt(MethodCall(    System.out, "println", [] ))
   putStrLn $ Pr.ppShow $ example
-  putStrLn $ Pr.ppShow $ getConstantsHT (getMethodDeclsFromClass example) 0
-  putStrLn $ Pr.ppShow $ getConstantsCpEntries example
+  --putStrLn $ Pr.ppShow $ getConstantsHT (getMethodDeclsFromClass example) 0
+  --putStrLn $ Pr.ppShow $ getConstantsCpEntries example
   putStrLn $ Pr.ppShow $ get_CP_Map example
   putStrLn $ Pr.ppShow $ codegen example
