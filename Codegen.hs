@@ -63,7 +63,7 @@ getFieldHT (FieldDecl(typ, f):fl) size =
 
 getConstantsHT :: [MethodDecl] -> Int -> Map String Int
 getConstantsHT [] _ = Map.empty
-getConstantsHT (Method(_, _, _, code, _):r) s = Map.union t (getConstantsHT r (Map.size t))
+getConstantsHT (Method(_, _, _, code, _):r) s = Map.union t (getConstantsHT r (s + (Map.size t)))
   where t = getConstantsHTHH code s
 
 getConstantsHTH :: [Stmt] -> Int -> Map String Int
@@ -81,7 +81,7 @@ getConstantsHTHH (While(expr, stmt))            s = getConstantsHTHHE expr s
 getConstantsHTHH (LocalVarDecl(typ, str))       s = Map.empty
 getConstantsHTHH (If(expr, stmt, Just(stmtElse))) s = Map.union t1 t2 where 
   t1 = getConstantsHTHH stmt s
-  t2 = getConstantsHTHH stmtElse (Map.size t1)
+  t2 = getConstantsHTHH stmtElse (s + (Map.size t1))
 getConstantsHTHH (If(expr, stmt, Nothing))      s = getConstantsHTHH stmt s
 getConstantsHTHH (StmtExprStmt(stmtExpr))       s = getConstantsHTHHS stmtExpr s
 
@@ -96,7 +96,7 @@ getConstantsHTHHE (Binary (str, expr1, expr2)) s = Map.union t (getConstantsHTHH
 getConstantsHTHHE (Integer i)                  s = Map.fromList [(show i, s)]
 getConstantsHTHHE (Bool b)                     s = Map.empty
 getConstantsHTHHE (Char c)                     s = Map.fromList [(show c, s)]
-getConstantsHTHHE (String s1)                  s = Map.fromList [(s1, s)]
+getConstantsHTHHE (String s1)                  s = Map.fromList [("u:" ++ s1, s), (show s, s+1)]
 getConstantsHTHHE (Jnull)                      s = Map.empty
 getConstantsHTHHE (StmtExprExpr(stmtExpr))     s = getConstantsHTHHS stmtExpr s
 getConstantsHTHHE (TypedExpr(expr, typ))       s = Map.fromList $ map (\(s, i) -> ((typ ++ ":" ++ s), i)) $ Map.toList $ getConstantsHTHHE expr s
@@ -162,7 +162,9 @@ constantsHTEntryToCP_Info (s, i) = let l = reverse $ splitOn ":" s in
         Nothing            -> [Utf8_Info { tag_cp = TagUtf8, tam_cp = length content, cad_cp = content, desc = typ ++ ":" ++ content}]
       | typ == "C"         -> case content of 
         ['\'', char, '\''] -> [Integer_Info { tag_cp = TagInteger, numi_cp = fromEnum char, desc = typ ++ ":" ++ content }]
-        _                   -> [Utf8_Info { tag_cp = TagUtf8, tam_cp = length content, cad_cp = content, desc = typ ++ ":" ++ content}]
+        _                  -> [Utf8_Info { tag_cp = TagUtf8, tam_cp = length content, cad_cp = content, desc = typ ++ ":" ++ content}]
+      | typ == "u"         -> [Utf8_Info { tag_cp = TagUtf8, tam_cp = length content, cad_cp = content, desc = "S:" ++ content}]
+      | typ == stringType  -> [String_Info {tag_cp = TagString, index_cp = read content, desc = typ ++ ":#" ++ content} ]
       | typ == "var"       -> [Utf8_Info { tag_cp = TagUtf8, tam_cp = length content, cad_cp = content, desc = typ ++ ":" ++ content}]
     
   
@@ -196,7 +198,7 @@ get_CP_Infos c@(Class(typ, fieldDecls, methodDecls)) = do
     tag_cp = TagMethodRef,
     index_name_cp = cpht Map.! typ,
     index_nameandtype_cp = natCpht Map.! (mName ++ ":" ++ (getMethodType mTyp mArgs)),
-    desc = typ ++ "." ++ mName ++ ":" ++ mTyp
+    desc = typ ++ "." ++ mName ++ ":" ++ (getMethodType mTyp mArgs)
   } | Method(mTyp, mName, mArgs, _, _) <- methodDecls]
   cpStringsClassesFieldsMethods ++ (getConstantsCpEntries c)
 
@@ -351,9 +353,10 @@ codegen c@(Class(typ, fieldDecls, methodDecls)) = ClassFile {
 
 main :: IO()
 main = do 
-  let example = head $ typecheck $ [ Class ("Bsp", [FieldDecl("I", "n"), FieldDecl("Z", "b1"), FieldDecl("C", "c1"), FieldDecl("F", "f1"), FieldDecl("D", "d1")], [
+  let example = head $ typecheck $ [ Class ("Bsp", [FieldDecl("I", "n"), FieldDecl("Z", "b1"), FieldDecl("C", "c1"), FieldDecl("F", "f1"), FieldDecl("D", "d1"), FieldDecl("Ljava/lang/String", "s1")], [
         Method ("V", "<init>", [], Block([
-          StmtExprStmt $ Assign (LocalOrFieldVar "n", Integer 0)
+          StmtExprStmt $ Assign (LocalOrFieldVar "n", Integer 0),
+          StmtExprStmt $ Assign (LocalOrFieldVar "s1", String "abc")
         ]), False),
         Method ("V", "main", [("[Ljava/lang/String;", "args")], Block ([
           LocalVarDecl("I", "i"),
@@ -369,8 +372,8 @@ main = do
           ReturnV
         ]), True)
         ])]
-  putStrLn $ Pr.ppShow $ example
+  putStrLn $ Pr.ppShow $ sortMap $ get_CP_Map_no_constants example
   --putStrLn $ Pr.ppShow $ getConstantsHT (getMethodDeclsFromClass example) 0
   --putStrLn $ Pr.ppShow $ getConstantsCpEntries example
-  putStrLn $ Pr.ppShow $ get_CP_Map example
+  putStrLn $ Pr.ppShow $ sortMap $ get_CP_Map example
   putStrLn $ Pr.ppShow $ codegen example
