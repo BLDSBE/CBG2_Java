@@ -64,7 +64,7 @@ getEnvFromFields [] = Map.empty
 getTypedMethods :: LookUp -> Env -> [MethodDecl] -> [MethodDecl]
 getTypedMethods lookUp env (Method(typ, name, args, body, static) : methods) =
 	let newEnv = Map.union (getEnvFromArgList args) env in -- notice that args possibly override env
-		Method(typ, name, args, getTypedMethodBody (lookUp) newEnv body, static)
+		Method(typ, name, args, getTypedMethodBody (lookUp) newEnv typ body, static)
 		: getTypedMethods (lookUp) env methods
 getTypedMethods lookUp env [] = []
 
@@ -73,46 +73,53 @@ getEnvFromArgList ((typ, name) : tail) =
 	Map.insert name typ (getEnvFromArgList tail)
 getEnvFromArgList [] = Map.empty
 
-getTypedMethodBody :: LookUp -> Env -> Stmt -> Stmt
-getTypedMethodBody lookUp env b@(Block(_)) = let (s, newEnv) = (getTypedStatement (lookUp) env b) in s
-getTypedMethodBody lookUp env s = s -- This should never happen!
+getTypedMethodBody :: LookUp -> Env -> Type -> Stmt -> Stmt
+getTypedMethodBody lookUp env typ b@(Block(_)) = 
+								let (s, newEnv) = (getTypedStatement (lookUp) env typ b) in s
+getTypedMethodBody lookUp env typ s = s -- This should never happen!
 								 	  			-- (Java doesn't allow other statements as method body)
 ----------------------------------------------------------------------------------------------------
 
 
 
 --Statements----------------------------------------------------------------------------------------
-getTypedStatementList :: LookUp -> Env -> [Stmt] -> [Stmt]
-getTypedStatementList lookUp env (s : tail) = let 
-																(newS, newEnv) = getTypedStatement (lookUp) env s in 
-														newS : (getTypedStatementList
-																		(lookUp) (Map.union newEnv env) tail)
-getTypedStatementList lookUp env [] = []
+getTypedStatementList :: LookUp -> Env -> Type -> [Stmt] -> [Stmt]
+getTypedStatementList lookUp env typ (s : tail) = let 
+															(newS, newEnv) = getTypedStatement (lookUp) env typ s in 
+																newS : (getTypedStatementList
+																		(lookUp) (Map.union newEnv env) typ tail)
+getTypedStatementList lookUp typ env [] = []
 
 
-getTypedStatement :: LookUp -> Env -> Stmt -> (Stmt, Env)
-getTypedStatement lookUp env (Block(sl)) = (Block(getTypedStatementList (lookUp) env sl), env)
-getTypedStatement lookUp env (Return(e)) = (Return(getTypedExpression (lookUp) env e), env)
-getTypedStatement lookUp env r@(ReturnV) = (r, env)
-getTypedStatement lookUp env (While(e, s)) = (While(getTypedExpression (lookUp) env e, 
+getTypedStatement :: LookUp -> Env -> Type -> Stmt -> (Stmt, Env)
+getTypedStatement lookUp env typ (Block(sl)) = (Block(getTypedStatementList (lookUp) env typ sl), env)
+getTypedStatement lookUp env typ (Return(e)) = let te = getTypedExpression (lookUp) env e in
+																if typ == getTypeFromExpr te then (Return(te), env)
+																else if typ == voidType then error notVoidReturnError
+																else error (typeMissmatchError (getTypeFromExpr te) typ)
+getTypedStatement lookUp env typ r@(ReturnV) = if typ == voidType
+															  then (r, env)
+															  else error (voidReturnError typ)
+getTypedStatement lookUp env typ (While(e, s)) = (While(getTypedExpression (lookUp) env e, 
 																let (newS, newEnv) = 
-																		getTypedStatement (lookUp) env s in newS), env)
-getTypedStatement lookUp env lvd@(LocalVarDecl(typ, name)) = 
-															(lvd, Map.insert name typ env) --possibly override
-getTypedStatement lookUp env (If(e, ifS, Just elseS)) = (If(getTypedExpression (lookUp) env e,
+																		getTypedStatement 
+																			(lookUp) env typ s in newS), env)
+getTypedStatement lookUp env typ lvd@(LocalVarDecl(varType, name)) = 
+															(lvd, Map.insert name varType env) --possibly override
+getTypedStatement lookUp env typ (If(e, ifS, Just elseS)) = (If(getTypedExpression (lookUp) env e,
 																	let (newIfS, newIfEnv) = 
-																			getTypedStatement (lookUp) env ifS 
+																			getTypedStatement (lookUp) env typ ifS 
 																		in newIfS,
 																	Just (
 																		let (newElseS, newElseEnv) = 
-																				getTypedStatement (lookUp) env elseS in 
-																			newElseS)
+																			getTypedStatement (lookUp) env typ elseS in 
+																				newElseS)
 																 ), env)
-getTypedStatement lookUp env (If(e, ifS, Nothing)) = (If(getTypedExpression (lookUp) env e, 
+getTypedStatement lookUp env typ (If(e, ifS, Nothing)) = (If(getTypedExpression (lookUp) env e, 
 																let (newIfS, newIfEnv) = 
-																		getTypedStatement (lookUp) env ifS in newIfS, 
+																	getTypedStatement (lookUp) env typ ifS in newIfS, 
 																Nothing), env)
-getTypedStatement lookUp env (StmtExprStmt(se)) = 
+getTypedStatement lookUp env typ (StmtExprStmt(se)) = 
 												(StmtExprStmt(getTypedStatementExpr (lookUp) env se), env)
 --getTypedStatement lookUp env s = (s, env) --error ("Unknown statement: " ++ s)
 ----------------------------------------------------------------------------------------------------
@@ -128,8 +135,7 @@ getTypedStatementExpr lookUp env (Assign(var, e)) = let te = getTypedExpression 
 																		if isSubType typeExpr typeVar 
 																		then TypedStmtExpr(Assign(tvar, te),
 																										getTypeFromExpr tvar)
-																		else error ("Type mismatch: cannot convert from " 
-																						++ typeExpr ++ " to " ++ typeVar)
+																		else error (typeMissmatchError typeExpr typeVar)
 getTypedStatementExpr lookUp env (New(typ, es)) =
 											TypedStmtExpr(New(typ, getTypedExpressionList (lookUp) env es), typ)
 getTypedStatementExpr lookUp env (MethodCall(e,name,es)) = 
@@ -218,7 +224,7 @@ getTypeByOperator op t1 t2 =
 	else if op == minus				then checkArithmeticTypes op t1 t2
 	
 	else if op == modulo 			then if isIntegerType t1 && isIntegerType t2 then intType
-												  else operatorError op t1 t2
+												  else error (operatorError op t1 t2)
 	
 	else if op == lessThan 			then checkNumberTypes op t1 t2
 	else if op == greaterThan 		then checkNumberTypes op t1 t2
@@ -230,7 +236,7 @@ getTypeByOperator op t1 t2 =
 	
 	else if op == instanceOf 		then if not (isPrimitiveType t1 || isPrimitiveType t2)
 												  then booleanType
-												  else operatorError op t1 t2
+												  else error (operatorError op t1 t2)
 
 	else if op == and1 				then matchTypes op t1 t2
 	else if op == or1 				then matchTypes op t1 t2
@@ -246,7 +252,7 @@ greaterType t1 t2 = intType
 matchTypes :: String -> Type -> Type -> Type
 matchTypes op t1 t2 = if t1 == booleanType && t2 == booleanType then t1
 							 else if isIntegerType t1 && isIntegerType t2 then intType
-						 	 else operatorError op t1 t2
+						 	 else error (operatorError op t1 t2)
 						 
 isSubType :: Type -> Type -> Bool
 -- Returns true iff t1 is castable to t2
@@ -270,26 +276,26 @@ isBooleanOperator op = op == booleanNot || op == instanceOf || op == equals || o
 
 checkShiftTypes :: String -> Type -> Type -> Type
 checkShiftTypes op t1 t2 = if isIntegerType t1 && isIntegerType t2 then t1
-								  else operatorError op t1 t2
+								  else error (operatorError op t1 t2)
 
 checkArithmeticTypes :: String -> Type -> Type -> Type
 checkArithmeticTypes op t1 t2 = if isNumberType t1 && isNumberType t2 then greaterType t1 t2
-										  else operatorError op t1 t2
+										  else error (operatorError op t1 t2)
 
 checkNumberTypes :: String -> Type -> Type -> Type
 checkNumberTypes op t1 t2 = if isNumberType t1 && isNumberType t2 then booleanType
-									 else operatorError op t1 t2
+									 else error (operatorError op t1 t2)
 
 checkEqualsOp :: String -> Type -> Type -> Type
 checkEqualsOp op t1 t2 = if (isPrimitiveType t1 && isPrimitiveType t2
 										&& (isSubType t1 t2 || isSubType t2 t1))
 									|| not (isPrimitiveType t1 || isPrimitiveType t2)
 								 then booleanType
-								 else operatorError op t1 t2
+								 else error (operatorError op t1 t2)
 
 checkBooleanOp :: String -> Type -> Type -> Type
 checkBooleanOp op t1 t2 = if t1 == booleanType && t2 == booleanType then t1
-								  else operatorError op t1 t2
+								  else error (operatorError op t1 t2)
 
 isIntegerType :: Type -> Bool
 isIntegerType typ = typ == intType || typ == charType
@@ -317,86 +323,18 @@ lookUpMethod env method = case Map.lookup method env of
 ----------------------------------------------------------------------------------------------------
 
 --Errors--------------------------------------------------------------------------------------------
-operatorError :: String -> Type -> Type -> Type
-operatorError op t1 t2 = error ("Operator \"" ++ op ++ "\" undefined for " ++ t1 ++ " and " ++ t2)
+operatorError :: String -> Type -> Type -> String
+operatorError op t1 t2 = "Operator \"" ++ op ++ "\" undefined for " ++ t1 ++ " and " ++ t2
+
+typeMissmatchError :: Type -> Type -> String
+typeMissmatchError typ1 typ2 = "Type mismatch: cannot convert from " ++ typ1 ++ " to " ++ typ2
+					
+voidReturnError :: Type -> String
+voidReturnError typ = "This method must return a result of type " ++ typ
+
+notVoidReturnError :: String
+notVoidReturnError = "Void methods cannot return a value"
 ----------------------------------------------------------------------------------------------------
-
-
-{-testExample = [Class("Bsp", [FieldDecl(booleanType, "myBool")], [
-		Method("void", "main", [("String[]", "args")], 
-				Block([
-					LocalVarDecl(intType, "i"),
-					StmtExprStmt(Assign("i", Integer(1))),
-					LocalVarDecl(booleanType, "a"),
-					StmtExprStmt(Assign("a", Bool(True))),
-					LocalVarDecl(charType, "b"),
-					StmtExprStmt(Assign("b", Char('t'))),
-					
-					--If(InstVar(LocalOrFieldVar(thisString), "myBool"),
-						--	StmtExprStmt(Assign("i", Integer(1))),
-							--Just (StmtExprStmt(Assign("b", Char('f'))))  )
-							
-					LocalVarDecl("MyClass", "x"),
-					StmtExprStmt(Assign("x", StmtExprExpr(New("MyClass",[])))),
-					
-					While(Bool(True),
-							Block([StmtExprStmt(MethodCall(LocalOrFieldVar("x"),
-								 									"setI", 
-								 									[Binary("+",
-								 										Unary("-",
-								 												StmtExprExpr(MethodCall(
-								 													LocalOrFieldVar("x"), "getI",[]))),
-								 										Integer(1))]))
-								 	])),
-
-					StmtExprStmt(Assign("x", Jnull))
-				])
-			)
-	]),
-	Class("MyClass", [FieldDecl(intType, "i")], 
-			[
-				Method(intType, "getI", [], Block([Return(LocalOrFieldVar("i"))])),
-				Method("void", "setI", [(intType, "_i")], Block([StmtExprStmt(Assign("i", LocalOrFieldVar("_i")))])) 
-			])
-	]
-	
-testBlock = Block([--LocalVarDecl(charType, "c"),
-					--LocalVarDecl(intType, "i"),
-					--LocalVarDecl(intType, "j"),
-					--StmtExprStmt(Assign("j", LocalOrFieldVar("i")))
-					LocalVarDecl("i", intType),
-					Return(LocalOrFieldVar("i")) ])
-					
-testBlock2 = Block([
-					--LocalVarDecl(intType, "i"),
-					StmtExprStmt(Assign("j", Integer(1))),
-					--LocalVarDecl(booleanType, "a"),
-					--StmtExprStmt(Assign("a", Bool(True))),
-					--LocalVarDecl(charType, "b"),
-					--StmtExprStmt(Assign("b", Char('t'))),
-					
-					
-					StmtExprStmt(Assign("i", LocalOrFieldVar("i")))
-					--If( Binary("&&", Bool(True), Bool(False)), 
-					--		StmtExprStmt(Assign("i", Integer(1))), 
-					--		Just (StmtExprStmt(Assign("b", Char('f'))))  )
-				])
-          
-test = Method("void", "main", [("String[]", "args")], 
-				Block([
-					LocalVarDecl(intType, "i"),
-					StmtExprStmt(Assign("i", Integer(1))),
-					LocalVarDecl(booleanType, "a"),
-					StmtExprStmt(Assign("a", Bool(True))),
-					LocalVarDecl(charType, "b"),
-					StmtExprStmt(Assign("b", Char('t'))),
-					
-					If( Binary("&&", Bool(True), Bool(False)),
-							StmtExprStmt(Assign("i", Integer(1))), 
-							Just (StmtExprStmt(Assign("b", Char('f'))))  )
-				])
-			)-}
-
 testInstVarsAndAssign = [
 		Class("A", [FieldDecl(intType, "i"), FieldDecl("B", "x")],
 			[Method(voidType, "test", [], Block([
@@ -447,6 +385,17 @@ testStatic = [
 testError = Block([
 						LocalVarDecl(objectType, "x"),
 						StmtExprStmt(Assign(LocalOrFieldVar("x"), ClassId("B") ))])
+
+testVoidError = [Class("CompareTest",
+                    [FieldDecl("IfTest", "a")],
+                    [Method(voidType, "compareMethod",
+                        [],
+                        Block([
+                            StmtExprStmt(Assign(LocalOrFieldVar("a"), 
+                                StmtExprExpr(New("IfTest", [Integer(3), Integer(2)])))),
+                            Return(LocalOrFieldVar("a"))
+                        ]), True)]
+                    )]
 
 main :: IO()
 main = --print $ typecheck testExample
