@@ -83,6 +83,9 @@ getTypedMethodBody lookUp env typ s = s -- This should never happen!
 
 
 --Statements----------------------------------------------------------------------------------------
+-- LookUp contains all classes with their fields and methods
+-- Env contains all local variables
+-- Type is the return type of the surrounding method
 getTypedStatementList :: LookUp -> Env -> Type -> [Stmt] -> [Stmt]
 getTypedStatementList lookUp env typ (s : tail) = let 
 															(newS, newEnv) = getTypedStatement (lookUp) env typ s in 
@@ -90,7 +93,9 @@ getTypedStatementList lookUp env typ (s : tail) = let
 																		(lookUp) (Map.union newEnv env) typ tail)
 getTypedStatementList lookUp typ env [] = []
 
-
+-- LookUp contains all classes with their fields and methods
+-- Env contains all local variables
+-- Type is the return type of the surrounding method
 getTypedStatement :: LookUp -> Env -> Type -> Stmt -> (Stmt, Env)
 getTypedStatement lookUp env typ (Block(sl)) = (Block(getTypedStatementList (lookUp) env typ sl), env)
 getTypedStatement lookUp env typ (Return(e)) = let te = getTypedExpression (lookUp) env e in
@@ -127,6 +132,7 @@ getTypedStatement lookUp env typ (StmtExprStmt(se)) =
 
 
 --StatementExpressions------------------------------------------------------------------------------
+-- classes, vars, StmtExpr
 getTypedStatementExpr :: LookUp -> Env -> StmtExpr -> StmtExpr
 getTypedStatementExpr lookUp env (Assign(var, e)) = let te = getTypedExpression (lookUp) env e in
 																	 let tvar = getTypedExpression (lookUp) env var in
@@ -156,11 +162,13 @@ getTypedStatementExpr lookUp env se = se --error ("Unknown ExprStmt: " ++ se)
 
 
 --Expressions---------------------------------------------------------------------------------------
+-- classes, vars, list of expressions
 getTypedExpressionList :: LookUp -> Env -> [Expr] -> [Expr]
 getTypedExpressionList lookUp env (e : tail) =
 		getTypedExpression (lookUp) env e : getTypedExpressionList (lookUp) env tail
 getTypedExpressionList lookUp env [] = []
 
+-- classes, vars, expression
 getTypedExpression :: LookUp -> Env -> Expr -> Expr
 getTypedExpression lookUp env this@(This) = TypedExpr(this, lookUpVariable env thisString)
 getTypedExpression lookUp env super@(Super) = TypedExpr(super, lookUpVariable env superString)
@@ -176,23 +184,19 @@ getTypedExpression lookUp env (InstVar(e, name)) =
 											TypedExpr(InstVar(te, name), typ) -- return that type
 
 getTypedExpression lookUp env (Unary(op, e)) = let te = getTypedExpression (lookUp) env e in
-																	let typ = getTypeFromExpr te in
-																		if 	isNumberOperator op && isNumberType typ 
-																			|| isBooleanOperator op && typ == booleanType 
-																			|| op == bitwiseNot && isIntegerType typ then
-																			TypedExpr(Unary(op, te), typ)
-																		else
-																			error ("The operator is undefined for the argument"
-																				++ " type " ++ typ)
+																let typ = getTypeFromExpr te in
+																	if (isNumberOperator op && isNumberType typ) 
+																		|| (isBooleanOperator op && typ == booleanType) 
+																		|| (op == bitwiseNot && isIntegerType) typ
+																	then TypedExpr(Unary(op, te), typ)
+																	else error (unaryOperatorError op typ)
 
 getTypedExpression lookUp env (Binary(name, e1, e2)) =
 									let te1 = getTypedExpression (lookUp) env e1 in
 										let te2 = getTypedExpression (lookUp) env e2 in
 											let t1 = getTypeFromExpr te1 in
 												let t2 = getTypeFromExpr te2 in
-											TypedExpr(
-												Binary(name, te1, te2),
-												getTypeByOperator name t1 t2)
+													TypedExpr(Binary(name, te1, te2), getTypeByOperator name t1 t2)
 												
 getTypedExpression lookUp env i@(Integer(_)) = TypedExpr(i, intType)
 getTypedExpression lookUp env b@(Bool(_)) = TypedExpr(b, booleanType)
@@ -211,7 +215,8 @@ getTypedExpression lookUp env e = e --error ("Unknown Expression: " ++ e)
 -- <,>,<=,>=,instanceof,==,!=: boolean
 -- &,|,^: lvalue, rvalue (either integer type or boolean)
 -- &&, ||: boolean
--- TODO: errors
+
+-- operator, left type, right type
 getTypeByOperator :: String -> Type -> Type -> Type
 getTypeByOperator op t1 t2 = 
 	if 	  op == shiftL 			then checkShiftTypes op t1 t2
@@ -258,7 +263,7 @@ isSubType :: Type -> Type -> Bool
 -- Returns true iff t1 is castable to t2
 isSubType t1 t2 = if 		t2 == intType 		then t1 == intType || t1 == charType
 						else if	t2 == charType		then t1 == charType
-						else if	t2 == stringType	then t1 == stringType || t1 == charType || t1 == nullType
+						else if	t2 == stringType	then t1 == stringType || t1 == nullType
 						else if	t2 == booleanType	then t1 == booleanType
 						else if 	t2 == objectType	then t1 /= intType && t1 /= charType && t1 /= booleanType
 						else 									  t2 == t1
@@ -276,7 +281,7 @@ isBooleanOperator op = op == booleanNot || op == instanceOf || op == equals || o
 
 checkShiftTypes :: String -> Type -> Type -> Type
 checkShiftTypes op t1 t2 = if isIntegerType t1 && isIntegerType t2 then t1
-								  else error (operatorError op t1 t2)
+								 	else error (operatorError op t1 t2)
 
 checkArithmeticTypes :: String -> Type -> Type -> Type
 checkArithmeticTypes op t1 t2 = if isNumberType t1 && isNumberType t2 then greaterType t1 t2
@@ -304,6 +309,8 @@ isPrimitiveType :: Type -> Bool
 isPrimitiveType t = t == booleanType || isNumberType t
 ----------------------------------------------------------------------------------------------------
 
+
+
 --LookUps-------------------------------------------------------------------------------------------
 lookUpVariable :: Env -> String -> Type
 lookUpVariable env var = case Map.lookup var env of
@@ -322,9 +329,14 @@ lookUpMethod env method = case Map.lookup method env of
 
 ----------------------------------------------------------------------------------------------------
 
+
+
 --Errors--------------------------------------------------------------------------------------------
 operatorError :: String -> Type -> Type -> String
 operatorError op t1 t2 = "Operator \"" ++ op ++ "\" undefined for " ++ t1 ++ " and " ++ t2
+
+unaryOperatorError :: String -> Type -> String
+unaryOperatorError op typ = "The operator " ++ op ++ " is undefined for the argument type " ++ typ
 
 typeMissmatchError :: Type -> Type -> String
 typeMissmatchError typ1 typ2 = "Type mismatch: cannot convert from " ++ typ1 ++ " to " ++ typ2
@@ -335,6 +347,9 @@ voidReturnError typ = "This method must return a result of type " ++ typ
 notVoidReturnError :: String
 notVoidReturnError = "Void methods cannot return a value"
 ----------------------------------------------------------------------------------------------------
+
+
+
 testInstVarsAndAssign = [
 		Class("A", [FieldDecl(intType, "i"), FieldDecl("B", "x")],
 			[Method(voidType, "test", [], Block([
