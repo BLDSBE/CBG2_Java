@@ -187,7 +187,7 @@ getTypedExpression lookUp env (Unary(op, e)) = let te = getTypedExpression (look
 																let typ = getTypeFromExpr te in
 																	if (isNumberOperator op && isNumberType typ) 
 																		|| (isBooleanOperator op && typ == booleanType) 
-																		|| (op == bitwiseNot && isIntegerType) typ
+																		|| (op == bitwiseNot && isIntegerType typ)
 																	then TypedExpr(Unary(op, te), typ)
 																	else error (unaryOperatorError op typ)
 
