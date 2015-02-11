@@ -76,7 +76,7 @@ data CP_Info =
                 }
         | Float_Info 
                 { tag_cp                :: Tag
-                , numf_cp               :: Float
+                , numf_cp               :: Int
                 , desc                  :: String
                 }
         | Long_Info 

@@ -1,9 +1,12 @@
+{-# LANGUAGE ViewPatterns #-}
+
 module Typecheck where
 import AbsSyn
 import Constants
 import Data.Map (Map)
 import qualified Data.Map as Map
 import qualified Text.Show.Pretty as Pr
+import Data.List
 
 type Env = Map String Type
 type ClassMap = Map Type (Env, Env) -- A map className => (Fields, Methods)
@@ -259,11 +262,20 @@ matchTypes op t1 t2 = if t1 == booleanType && t2 == booleanType then t1
 							 else if isIntegerType t1 && isIntegerType t2 then intType
 						 	 else error (operatorError op t1 t2)
 						 
+						 
+stripSuffix :: String -> String -> Maybe String
+stripSuffix s s1 = let sr = reverse s1 in 
+	case (stripPrefix s sr) of 
+		Just s2 -> Just $ reverse s2
+		Nothing -> Nothing
+
 isSubType :: Type -> Type -> Bool
 -- Returns true iff t1 is castable to t2
+isSubType t1 (stripPrefix "L" -> Just t2) = let s3 = stripSuffix ";" t2 in case s3 of Just t3 -> t3 == t1
+isSubType (stripPrefix "L" -> Just t2) t1 = let s3 = stripSuffix ";" t2 in case s3 of Just t3 -> t3 == t1
 isSubType t1 t2 = if 		t2 == intType 		then t1 == intType || t1 == charType
 						else if	t2 == charType		then t1 == charType
-						else if	t2 == stringType	then t1 == stringType || t1 == nullType
+						else if	t2 == stringType	then t1 == stringType || t1 == nullType || t1 == stringReferenceType
 						else if	t2 == booleanType	then t1 == booleanType
 						else if 	t2 == objectType	then t1 /= intType && t1 /= charType && t1 /= booleanType
 						else 									  t2 == t1

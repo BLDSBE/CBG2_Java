@@ -7,8 +7,7 @@ public class Bsp {
     int n = 0;
     boolean b1 = false;
     char c1 = 'c';
-    float f1 = 0.1f;
-    double d1 = 0.1;
+    String s1 = "abc";
 
     /**
      * @param args the command line arguments
@@ -25,11 +24,6 @@ public class Bsp {
             c = 'f';
         //System.out.println("bool war "+ b +", deshalb ist i = "+i);
         
-    }
-
-    public void a(Integer[] b){
-
-
     }
     
 }

@@ -3,6 +3,7 @@ import ClassFormat
 import AbsSyn
 import Typecheck hiding (main)
 import Constants
+import Bytecodegen
 import Data.List.Split
 import Data.List
 import qualified Text.Show.Pretty as Pr
@@ -17,7 +18,7 @@ readMaybe s = case reads s of
 
 
 namesAndTypes :: Class -> Int -> Map String Int
-namesAndTypes c@(Class(_, [], [])) _ = Map.empty
+namesAndTypes c@(Class(_, [], [])) size = Map.fromList [("nat:<init>:()V", size)]
 
 namesAndTypes c@(Class(typ, [], (Method(t, n, args, _, _)):methodDecls)) i = 
   Map.insert ("nat:" ++ n ++ ":" ++ (getMethodType t args)) i (namesAndTypes (Class(typ, [], methodDecls)) (i + 1))
@@ -30,14 +31,14 @@ sortMap m = (sortBy (\(a1, b1) (a2, b2) -> b1 `compare` b2)) $ Map.toList m
 
 getUtf8HashTable :: Class -> Map String Int
 getUtf8HashTable (Class(typ, fieldDecls, methodDecls)) = 
-  let methodHT = getMethodStringsHT methodDecls 0 in
-  let fieldHT = getFieldStringsHT fieldDecls (Map.size methodHT) in 
+  let methodHT = getMethodStringsHT methodDecls 1 in
+  let fieldHT = getFieldStringsHT fieldDecls (1 + (Map.size methodHT)) in 
   Map.union 
     (Map.union methodHT fieldHT) 
     (Map.fromList 
-      [ (typ, (Map.size fieldHT) + (Map.size methodHT))
+      [ (typ, (Map.size fieldHT) + (Map.size methodHT) + 1)
       , ("java/lang/Object"
-      , (Map.size fieldHT) + (Map.size methodHT) + 1)
+      , (Map.size fieldHT) + (Map.size methodHT) + 2)
       ]
     )
 
@@ -70,16 +71,16 @@ getFieldHT (Class(cname, (FieldDecl(typ, f):fl), m)) size =
   Map.union (Map.fromList [("field:" ++ f, size)]) (getFieldHT (Class(cname, fl, m)) (size + 1))
 
 getMethodHT :: Class -> Int -> Map String Int
-getMethodHT (Class(_, _, [])) _ = Map.empty
-getMethodHT (Class(cname, f, (Method(typ, name, _, _, _)):ml)) size = 
-  Map.union (Map.fromList [("method:" ++ name, size)]) (getMethodHT (Class(cname, f, ml)) (size + 1))
+getMethodHT (Class(cname, _, [])) size = Map.fromList [("method:java/lang/Object.<init>", size)]
+getMethodHT (Class(cname, f, (Method(typ, name, _, _, body)):ml)) size = 
+  Map.union (Map.fromList [("method:this." ++ name, size)]) (getMethodHT (Class(cname, f, ml)) (size + 1))
 
 
 
 
 getConstantsHT :: [MethodDecl] -> Int -> Map String Int
 getConstantsHT [] _ = Map.empty
-getConstantsHT (Method(_, _, _, code, _):r) s = Map.union t (getConstantsHT r (s + (Map.size t)))
+getConstantsHT (Method(_, _, _, code, _):r) s = Map.union t (getConstantsHT r (s + 1 +(Map.size t)))
   where t = getConstantsHTHH code s
 
 getConstantsHTH :: [Stmt] -> Int -> Map String Int
@@ -112,7 +113,7 @@ getConstantsHTHHE (Binary (str, expr1, expr2)) s = Map.union t (getConstantsHTHH
 getConstantsHTHHE (Integer i)                  s = Map.fromList [(show i, s)]
 getConstantsHTHHE (Bool b)                     s = Map.empty
 getConstantsHTHHE (Char c)                     s = Map.fromList [(show c, s)]
-getConstantsHTHHE (String s1)                  s = Map.fromList [(s1, s+1), ("u:" ++ (show (s+1)), s)]
+getConstantsHTHHE (String s1)                  s = Map.fromList [(s1, s+1), (stringReferenceType ++ ":" ++ (show (s+1)), s)]
 getConstantsHTHHE (Jnull)                      s = Map.empty
 getConstantsHTHHE (StmtExprExpr(stmtExpr))     s = getConstantsHTHHS stmtExpr s
 getConstantsHTHHE (TypedExpr(expr, typ))       s = Map.fromList $ map (\(s, i) -> ((typ ++ ":" ++ s), i)) $ Map.toList $ getConstantsHTHHE expr s
@@ -157,18 +158,18 @@ natHT_toCP_Infos ht cpHt = foldr
 get_CP_Map_no_constants :: Class -> Map String Int
 get_CP_Map_no_constants c@(Class(typ, f, m)) = meths
   where strs   = getUtf8HashTable c
-        nat    = Map.union strs (namesAndTypes c (Map.size strs))
-        clas   = Map.union nat (Map.fromList [("class:" ++ typ, Map.size nat), ("class:java/lang/Object", (Map.size nat) + 1)])
-        fields = Map.union clas (getFieldHT c (Map.size clas))
-        meths  = Map.union fields (getMethodHT c (Map.size fields))
+        nat    = Map.union strs (namesAndTypes c ((1 +) $ Map.size strs))
+        clas   = Map.union nat (Map.fromList [("class:" ++ typ, (1 +) $ Map.size nat), ("class:java/lang/Object", ((1 +) $ Map.size nat) + 1)])
+        fields = Map.union clas (getFieldHT c ((1 +) $ Map.size clas))
+        meths  = Map.union fields (getMethodHT c ((1 +) $ Map.size fields))
 
 get_CP_Map :: Class -> Map String Int
-get_CP_Map c@(Class(name, _, _)) = Map.union (Map.fromList [("class:this", t2 Map.! name)]) t2  where 
+get_CP_Map c@(Class(name, _, _)) = Map.union (Map.fromList [("class:this", t2 Map.! ("class:" ++ name))]) t2  where 
   t1 = get_CP_Map_no_constants c
-  t2 = (Map.union t1 (cleanupConstantsCpEntries $ getConstantsHT (getMethodDeclsFromClass c) (Map.size t1)))
+  t2 = (Map.union t1 (cleanupConstantsCpEntries $ getConstantsHT (getMethodDeclsFromClass c) (1 + (Map.size t1))))
 
 getConstantsCpEntries :: Class -> CP_Infos                                          
-getConstantsCpEntries c = let ht = sortMap $ getConstantsHT (getMethodDeclsFromClass c) (Map.size t) in
+getConstantsCpEntries c = let ht = sortMap $ getConstantsHT (getMethodDeclsFromClass c) ((1 +) $ Map.size t) in
   constantsHTToCP_Infos ht
   where t = get_CP_Map_no_constants c
 
@@ -179,15 +180,15 @@ constantsHTEntryToCP_Info :: (String, Int) -> CP_Infos
 constantsHTEntryToCP_Info (s, i) = let l = reverse $ splitOn ":" s in
   case l of 
     (content:typ:rest) 
-      | typ == "I"          -> case (readMaybe content) of
-        Just content'       -> [Integer_Info { tag_cp = TagInteger, numi_cp = content', desc = typ ++ ":" ++ content }]   
-        Nothing             -> [Utf8_Info { tag_cp = TagUtf8, tam_cp = length content, cad_cp = content, desc = typ ++ ":" ++ content}]
-      | typ == "C"          -> case content of 
-        ['\'', char, '\'']  -> [Integer_Info { tag_cp = TagInteger, numi_cp = fromEnum char, desc = typ ++ ":" ++ content }]
-        _                   -> [Utf8_Info { tag_cp = TagUtf8, tam_cp = length content, cad_cp = content, desc = typ ++ ":" ++ content}]
-      | typ == stringType   -> [Utf8_Info { tag_cp = TagUtf8, tam_cp = length content, cad_cp = content, desc = "S:" ++ content}]
-      | typ == "u"          -> [String_Info {tag_cp = TagString, index_cp = read content, desc = typ ++ ":#" ++ content} ]
-      | typ == "var"        -> [Utf8_Info { tag_cp = TagUtf8, tam_cp = length content, cad_cp = content, desc = typ ++ ":" ++ content}]
+      | typ == "I"                  -> case (readMaybe content) of
+        Just content'               -> [Integer_Info { tag_cp = TagInteger, numi_cp = content', desc = "#" ++ (show i) ++ ":" ++ typ ++ ":" ++ content }]   
+        Nothing                     -> [Utf8_Info { tag_cp = TagUtf8, tam_cp = length content, cad_cp = content, desc = "#" ++ (show i) ++ ":" ++ typ ++ ":" ++ content}]
+      | typ == "C"                  -> case content of 
+        ['\'', char, '\'']          -> [Integer_Info { tag_cp = TagInteger, numi_cp = fromEnum char, desc = "#" ++ (show i) ++ ":" ++ typ ++ ":" ++ content }]
+        _                           -> [Utf8_Info { tag_cp = TagUtf8, tam_cp = length content, cad_cp = content, desc = "#" ++ (show i) ++ ":" ++ typ ++ ":" ++ content}]
+      | typ == stringType           -> [Utf8_Info { tag_cp = TagUtf8, tam_cp = length content, cad_cp = content, desc = "#" ++ (show i) ++ ":" ++ stringType ++ ":" ++ content}]
+      | typ == stringReferenceType  -> [String_Info {tag_cp = TagString, index_cp = read content, desc = "#" ++ (show i) ++ ":" ++ typ ++ ":#" ++ content} ]
+      | typ == "var"                -> [Utf8_Info { tag_cp = TagUtf8, tam_cp = length content, cad_cp = content, desc = "#" ++ (show i) ++ ":" ++ typ ++ ":" ++ content}]
     
   
  
@@ -196,30 +197,36 @@ constantsHTEntryToCP_Info (s, i) = let l = reverse $ splitOn ":" s in
 get_CP_Infos :: Class -> CP_Infos
 get_CP_Infos c@(Class(typ, fieldDecls, methodDecls)) = do
   let cpht = getUtf8HashTable c
-  let natCpht = namesAndTypes c (Map.size cpht)
+  let natCpht = namesAndTypes c (1 + (Map.size cpht))
   let strings = (cpht_toCP_Infos cpht) ++ (natHT_toCP_Infos natCpht cpht)
   let i = Map.size cpht
+  let fullCpht = get_CP_Map c
   let cpStringsClasses = strings ++ [ Class_Info {
     tag_cp = TagClass,
     index_cp = cpht Map.! typ,
-    desc = typ
+    desc = "#" ++ (show $ 1 + (length strings)) ++ ":" ++ typ
     }, Class_Info {
       tag_cp = TagClass,
       index_cp = cpht Map.! "java/lang/Object",
-      desc = "java/lang/Object"
+      desc = "#" ++ (show $ (2 +) $ length strings) ++ ":" ++ "java/lang/Object"
     }]
   let cpStringsClassesFields = cpStringsClasses ++ [ FieldRef_Info {
     tag_cp = TagFieldRef,
-    index_name_cp = cpht Map.! typ,
-    index_nameandtype_cp = natCpht Map.! ("nat:" ++ fName ++ ":" ++ fTyp),
+    index_name_cp = fullCpht Map.! "class:this",       
+    index_nameandtype_cp = fullCpht Map.! ("nat:" ++ fName ++ ":" ++ fTyp),
     desc = typ ++ "." ++ fName ++ ":" ++ fTyp
     } | FieldDecl(fTyp, fName) <- fieldDecls]
-  let cpStringsClassesFieldsMethods = cpStringsClassesFields ++ [MethodRef_Info {
+  let cpStringsClassesFieldsMethods = cpStringsClassesFields ++ [ MethodRef_Info {
     tag_cp = TagMethodRef,
-    index_name_cp = cpht Map.! typ,
-    index_nameandtype_cp = natCpht Map.! ("nat:" ++ mName ++ ":" ++ (getMethodType mTyp mArgs)),
+    index_name_cp = fullCpht Map.! "class:this",
+    index_nameandtype_cp = fullCpht Map.! ("nat:" ++ mName ++ ":" ++ (getMethodType mTyp mArgs)),
     desc = typ ++ "." ++ mName ++ ":" ++ (getMethodType mTyp mArgs)
-  } | Method(mTyp, mName, mArgs, _, _) <- methodDecls]
+  } | Method(mTyp, mName, mArgs, _, _) <- methodDecls] ++ [ MethodRef_Info {
+    tag_cp = TagMethodRef,
+    index_name_cp = fullCpht Map.! "class:java/lang/Object",
+    index_nameandtype_cp = fullCpht Map.! ("nat:<init>:()V"),
+    desc = "java/lang/Object.<init>:()V"
+  }]
   cpStringsClassesFieldsMethods ++ (getConstantsCpEntries c)
 
 
@@ -227,13 +234,13 @@ get_CP_Index :: Map String Integer -> String -> Int
 get_CP_Index map quStr = fromInteger $ (\a -> case a of Just b -> b; Nothing -> -1) $ Map.lookup quStr map
 
 get_ClassAccessFlags :: Class -> AccessFlags
-get_ClassAccessFlags c = AccessFlags [1]
+get_ClassAccessFlags c = AccessFlags [ acc_Public, acc_Synthetic ]
 
 get_Interfaces :: Class -> Interfaces
 get_Interfaces c = []
 
 getFieldAccessFlags :: Class -> FieldDecl -> AccessFlags
-getFieldAccessFlags _ _ = AccessFlags [1]
+getFieldAccessFlags _ _ = AccessFlags [ acc_Public, acc_Synthetic ]
 
 get_Field_Infos :: Class -> Field_Infos
 get_Field_Infos c@(Class(_, fieldDecls, _)) = let ht = getUtf8HashTable c in 
@@ -241,13 +248,13 @@ get_Field_Infos c@(Class(_, fieldDecls, _)) = let ht = getUtf8HashTable c in
     af_fi = getFieldAccessFlags c fr,
     index_name_fi = ht Map.! name,
     index_descr_fi = ht Map.! typ,
-    tam_fi = -1,
+    tam_fi = 0,
     array_attr_fi = []
   } | fr@(FieldDecl(typ, name)) <- fieldDecls]
 
 getMethodAccessFlags :: Class -> MethodDecl -> AccessFlags
-getMethodAccessFlags _ (Method (_, _, _, _, False)) = AccessFlags [1]  
-getMethodAccessFlags _ (Method (_, _, _, _, True)) = AccessFlags [1, 8]  
+getMethodAccessFlags _ (Method (_, _, _, _, False)) = AccessFlags [ acc_Public, acc_Synthetic ]  
+getMethodAccessFlags _ (Method (_, _, _, _, True)) = AccessFlags [ acc_Public , acc_Static, acc_Synthetic ]  
 
 get_Method_Infos :: Class -> Method_Infos
 get_Method_Infos c@(Class(_, _, methodDecls)) = let ht = get_CP_Map c in 
@@ -276,6 +283,9 @@ retTypLookup = Map.fromList [("I", "i"), ("C", "c"), ("Z", "i"),
         ("L", "l"), 
         ("D", "d"),
         ("F", "f")] 
+        
+-- "PHCL" <==> long commands (goto b1 b2) are encoded as one string, so we introduce this PlaceHolder to correct CodeLength
+-- Bytecodegen deletes those
 
 compileStmt :: Stmt -> Map String Int -> Map String Int -> Int -> ([Code], Map String Int, Int)
 compileStmt (Block([]))                      ht locals sh = ([], locals, 0)
@@ -290,7 +300,7 @@ compileStmt (While(expr, stmt))              ht locals sh =
       (codeBody, locals2, sh2) = compileStmt stmt ht locals1 sh1
       jumplength = (length codeBody) + (length codeIf) + 1
   -- while con do stuff == if(!con) jump; stuff; if(con) -jump
-  in (codeIf ++ ["ifeq " ++ show (jumplength)] ++ codeBody ++ codeIf ++ ["ifne " ++ show (-jumplength)], locals2,  max sh1 sh2)
+  in (codeIf ++ ["ifeq " ++ show (jumplength), "PHCL", "PHCL"] ++ codeBody ++ codeIf ++ ["ifne " ++ show (-jumplength), "PHCL", "PHCL"], locals2,  max sh1 sh2)
 compileStmt (LocalVarDecl(typ, str))         ht locals sh = ([], Map.insert (str) (Map.size locals) locals, sh)
 compileStmt (If(expr, stmt, mbStmt))         ht locals sh = 
   let (codeIf,   locals1, sh1) = compileExpr expr ht locals  sh
@@ -298,19 +308,19 @@ compileStmt (If(expr, stmt, mbStmt))         ht locals sh =
         case mbStmt of
           Just stmtElse -> 
             let (codeElse, locals3, sh3) = compileStmt stmtElse ht locals2 sh2 
-                codeThen' = codeThen ++ ["goto " ++ (show $ length codeElse)] in
+                codeThen' = codeThen ++ ["goto " ++ (show $ length codeElse), "PHCL", "PHCL"] in
             -- ifeq: if stacktop == 0 jump ahead (length codeThen) instructions 
             -- else: jump afterwards ahead length of elseblock
-            (codeIf ++ ["ifeq " ++ (show $ length codeThen')] ++ codeThen' ++ codeElse, locals3, max 1 $ max sh1 $ max sh2 sh3)
-          Nothing -> (codeIf ++ ["ifeq " ++ (show $ length codeThen)] ++ codeThen, locals2, max sh1 sh2)
+            (codeIf ++ ["ifeq " ++ (show $ length codeThen'), "PHCL", "PHCL"] ++ codeThen' ++ codeElse, locals3, max 1 $ max sh1 $ max sh2 sh3)
+          Nothing -> (codeIf ++ ["ifeq " ++ (show $ length codeThen), "PHCL", "PHCL"] ++ codeThen, locals2, max sh1 sh2)
 compileStmt (StmtExprStmt(stmtExpr))         ht locals sh = compileStmtExpr stmtExpr ht locals sh
 
 compileExpr :: Expr -> Map String Int -> Map String Int -> Int -> ([Code], Map String Int, Int)
-compileExpr This                             ht locals sh = (["ldc " ++ (show $ ht Map.! "class:this")],  locals, sh + 1)
-compileExpr Super                            ht locals sh = (["ldc " ++ (show $ ht Map.! "class:java/lang/Object")], locals, sh + 1)
+compileExpr This                             ht locals sh = (["ldc " ++ (show $ ht Map.! "class:this"), "PHCL", "PHCL"],  locals, sh + 1)
+compileExpr Super                            ht locals sh = (["ldc " ++ (show $ ht Map.! "class:java/lang/Object"), "PHCL", "PHCL"], locals, sh + 1)
 compileExpr (LocalOrFieldVar s)              ht locals sh = case (Map.lookup s locals) of
-  Just i ->  (["iload " ++ (show i)], locals, sh + 1)
-  Nothing -> (["ldc "   ++ (show $ ht Map.! ("field:" ++ s))], locals, sh + 1)
+  Just i ->  (["iload " ++ (show i), "PHCL", "PHCL"], locals, sh + 1)
+  Nothing -> (["ldc "   ++ (show $ ht Map.! ("field:" ++ s)), "PHCL", "PHCL"], locals, sh + 1)
 compileExpr (InstVar (expr, str))            ht locals sh = let (code, locals1, sh1) = compileExpr expr ht locals sh in (["instvar: "] ++ code ++ [", " ++ str], locals1, sh1)
 compileExpr (Unary (str, expr))              ht locals sh = let (code, locals1, sh1) = compileExpr expr ht locals sh in (["unary: " ++ str ++ ", "] ++ code, locals1, sh1)
 compileExpr (Binary (str, expr1, expr2))     ht locals sh = 
@@ -319,17 +329,18 @@ compileExpr (Binary (str, expr1, expr2))     ht locals sh =
       --bin                   = [str]
       bin                   = case str of
         "==" -> ["ixor", "ineg"] 
-        ">"  -> ["if_icmpgt " ++ (show 2), "iconst_0", "goto 2", "iconst_1"]
-        "<"  -> ["if_icmplt " ++ (show 2), "iconst_0", "goto 2", "iconst_1"]
-        ">=" -> ["if_icmpge " ++ (show 2), "iconst_0", "goto 2", "iconst_1"]
-        "<=" -> ["if_icmple " ++ (show 2), "iconst_0", "goto 2", "iconst_1"]
+        ">"  -> ["if_icmpgt " ++ (show 4), "PHCL", "PHCL", "iconst_0", "goto 2", "PHCL", "PHCL", "iconst_1"]
+        "<"  -> ["if_icmplt " ++ (show 4), "PHCL", "PHCL", "iconst_0", "goto 2", "PHCL", "PHCL", "iconst_1"]
+        ">=" -> ["if_icmpge " ++ (show 4), "PHCL", "PHCL", "iconst_0", "goto 2", "PHCL", "PHCL", "iconst_1"]
+        "<=" -> ["if_icmple " ++ (show 4), "PHCL", "PHCL", "iconst_0", "goto 2", "PHCL", "PHCL", "iconst_1"]
+        _    -> [str]
   in  (code1 ++ code2 ++ bin, locals, max sh1 sh2)
-compileExpr (Integer i)                      ht locals sh = (["ldc " ++ (show $ ht Map.! ("I:" ++ (show i)))], locals, sh + 1)
+compileExpr (Integer i)                      ht locals sh = (["ldc " ++ (show $ ht Map.! ("I:" ++ (show i))), "PHCL", "PHCL"], locals, sh + 1)
 compileExpr (Bool b)                         ht locals sh 
   | b == True  = (["iconst_1"], locals, sh + 1)
   | b == False = (["iconst_0"], locals, sh + 1)
-compileExpr (Char c)                         ht locals sh = (["ldc " ++ (show $ ht Map.! ("C:" ++ (show c)))], locals, sh + 1)
-compileExpr (String s)                       ht locals sh = (["ldc " ++ (show $ ht Map.! ("Ljava/lang/String:" ++ s))], locals, sh + 1)
+compileExpr (Char c)                         ht locals sh = (["ldc " ++ (show $ ht Map.! ("C:" ++ (show c))), "PHCL", "PHCL"], locals, sh + 1)
+compileExpr (String s)                       ht locals sh = (["ldc " ++ (show $ ht Map.! (stringReferenceType ++ ":" ++ (show $ ht Map.! (stringType ++ ":" ++ s)))), "PHCL", "PHCL"], locals, sh + 1)
 compileExpr (Jnull)                          ht locals sh = (["aconst_null"], locals, sh + 1)
 compileExpr (StmtExprExpr(stmtExpr))         ht locals sh = let (code, locals1, sh1) = compileStmtExpr stmtExpr ht locals sh in (code, locals1, sh1)
 compileExpr (TypedExpr(expr, typ))           ht locals sh = let (code, locals1, sh1) = compileExpr expr ht locals sh in (code, locals1, sh1)
@@ -337,18 +348,23 @@ compileExpr (TypedExpr(expr, typ))           ht locals sh = let (code, locals1, 
 compileStmtExpr :: StmtExpr -> Map String Int -> Map String Int -> Int -> ([Code], Map String Int, Int)
 compileStmtExpr (Assign(TypedExpr(LocalOrFieldVar var, typ1), TypedExpr(expr1, typ2))) ht locals sh = 
   let (code1, locals1, sh1) = compileExpr expr1 ht locals sh in case (Map.lookup var locals) of
-    Just i  -> (code1 ++ ["istore " ++ (show i)], locals1, sh1)
-    Nothing -> (["ldc " ++ (show $ (ht Map.! "class:this"))] ++ 
-                  code1 ++ ["putfield " ++ (show $ ht Map.! ("field:" ++ var))], locals1, sh1 + 1)
+    Just i  -> (code1 ++ ["istore " ++ (show i), "PHCL", "PHCL"], locals1, sh1)
+    Nothing -> (["ldc " ++ (show $ (ht Map.! "class:this")), "PHCL", "PHCL"] ++ 
+                  code1 ++ ["putfield " ++ (show $ ht Map.! ("field:" ++ var)), "PHCL", "PHCL"], locals1, sh1 + 1)
 
 compileStmtExpr (New(typ, exprs)) ht locals sh = 
   let (code1, locals1, sh1) = compileExprs exprs ht locals sh in 
     (["new: " ++ typ ++ ":"] ++ code1, locals1, sh1)
 
+compileStmtExpr (MethodCall(Super, str, exprs)) ht locals sh = 
+  let (code1, locals1, sh1) = compileExpr  Super ht locals  sh 
+      (code2, locals2, sh2) = compileExprs exprs ht locals1 sh1 in
+        (code1 ++ code2 ++ ["invokespecial " ++ (show $ ht Map.! ("method:java/lang/Object." ++ str)), "PHCL", "PHCL"], locals2, sh2)
+
 compileStmtExpr (MethodCall(expr, str, exprs)) ht locals sh = 
   let (code1, locals1, sh1) = compileExpr  expr  ht locals  sh 
       (code2, locals2, sh2) = compileExprs exprs ht locals1 sh1 in
-        (code1 ++ code2 ++ ["invokespecial " ++ (show $ ht Map.! ("method:" ++ str))], locals2, sh2)
+        (code1 ++ code2 ++ ["invokespecial " ++ (show $ ht Map.! ("method:this." ++ str)), "PHCL", "PHCL"], locals2, sh2)
 
 compileStmtExpr (TypedStmtExpr(stmtExpr, typ)) ht locals sh = let (code, locals1, sh1) = compileStmtExpr stmtExpr ht locals sh in (code, locals1, sh1)
 
@@ -372,8 +388,8 @@ codegen c@(Class(typ, fieldDecls, methodDecls)) = ClassFile {
   count_cp = length $ get_CP_Infos c,
   array_cp = get_CP_Infos c,
   acfg = get_ClassAccessFlags c,
-  this = ThisClass { index_th = cpHt Map.! typ },
-  super = SuperClass { index_sp = cpHt Map.! "java/lang/Object" },
+  this = ThisClass { index_th = cpHt Map.! ("class:" ++ typ) },
+  super = SuperClass { index_sp = cpHt Map.! "class:java/lang/Object" },
   count_interfaces = length $ get_Interfaces c,
   array_interfaces = get_Interfaces c,
   count_fields = length $ get_Field_Infos c,
@@ -387,31 +403,25 @@ codegen c@(Class(typ, fieldDecls, methodDecls)) = ClassFile {
 
 main :: IO()
 main = do 
-  let example = head $ typecheck $ [ Class ("Bsp", [FieldDecl("I", "n"), FieldDecl("Z", "b1"), FieldDecl("C", "c1"), FieldDecl("Ljava/lang/String", "s1")], [
+  let example = head $ typecheck $ [ Class ("Bsp", [FieldDecl("I", "n"), FieldDecl("Z", "b1"), FieldDecl("C", "c1"), FieldDecl(stringReferenceType, "s1")], [
         Method ("V", "<init>", [], Block([
           StmtExprStmt $ MethodCall(Super, "<init>", []),
           StmtExprStmt $ Assign (LocalOrFieldVar "n", Integer 0),
           StmtExprStmt $ Assign (LocalOrFieldVar "s1", String "abc"),
           ReturnV
-        ]), False),
-        Method ("V", "main", [("[Ljava/lang/String;", "args")], Block ([
-          LocalVarDecl("I", "i"),
-          StmtExprStmt $ Assign (LocalOrFieldVar "i", Integer 50000),
-          LocalVarDecl ("Z", "a"),
-          StmtExprStmt $ Assign (LocalOrFieldVar "a", Bool True),
-          LocalVarDecl ("C", "c"),
-          StmtExprStmt $ Assign (LocalOrFieldVar "c", Char 't'),
-          If (LocalOrFieldVar "a", 
-            StmtExprStmt $ Assign (LocalOrFieldVar "i", Integer 5), 
-            Just $ StmtExprStmt $ Assign $ (LocalOrFieldVar "c", Char 'f')
-          ),
-          ReturnV
-        ]), True)
+        ]), False)
         ])]
   --putStrLn $ Pr.ppShow $ sortMap $ get_CP_Map_no_constants example
   --putStrLn $ Pr.ppShow $ getConstantsHT (getMethodDeclsFromClass example) 0
   --putStrLn $ Pr.ppShow $ getConstantsCpEntries example
   putStrLn $ Pr.ppShow $ sortMap $ get_CP_Map example
-  putStrLn $ Pr.ppShow $ codegen example
+  --putStrLn $ Pr.ppShow $ codegen example
+  --putStrLn $ Pr.ppShow $ bytecodegen $ codegen example
+  saveBytecode "Bsp.class" $ bytecodegen $ codegen example
+  writeFile "Bsp.ClassFile" $ Pr.ppShow $ sortMap $ get_CP_Map example
+  appendFile "Bsp.ClassFile" "\n\n"
+  appendFile "Bsp.ClassFile" $ Pr.ppShow $ codegen example
+  writeFile "Bsp.class.Text" $ Pr.ppShow $ bytecodegen $ codegen example
+  --writeFile "Bsp.class.Text" $ joinA $ map (\c -> (show c)++", ") $ bytecodegen $ codegen example
   --putStrLn $ Pr.ppShow $ sortMap $ get_CP_Map example
   --putStrLn $ Pr.ppShow $ get_CP_Infos example 
