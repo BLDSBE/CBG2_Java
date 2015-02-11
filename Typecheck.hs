@@ -9,9 +9,10 @@ import qualified Text.Show.Pretty as Pr
 import Data.List
 
 type Env = Map String Type
-type ClassMap = Map Type (Env, Env) -- A map className => (Fields, Methods)
-type LookUp = Type -> (Env,Env)		-- A function type that allows a direkt lookup in the ClassMap
-												-- and prevents from manipulating it
+type MethodMap = Map String (Type, [Type])-- Allows to typecheck return AND arg types
+type ClassMap = Map Type (Env, MethodMap) -- A map className => (Fields, Methods)
+type LookUp = Type -> (Env, MethodMap)		-- A function type that allows a direkt lookup in the
+														-- ClassMap and prevents from manipulating it
 
 
 {- TODO:
@@ -50,9 +51,11 @@ getTypedClass lookUp (Class(typ, fields, methods)) = Class (
 				(let (fields, methods) = lookUp typ in fields))) 
 		methods     )
 
-getEnvFromMethods :: [MethodDecl] -> Env
-getEnvFromMethods (Method(typ, name, _, _, _) : tail) =
-	Map.insert name typ (getEnvFromMethods tail)
+getEnvFromMethods :: [MethodDecl] -> MethodMap
+getEnvFromMethods (Method(typ, name, args, _, _) : tail) =
+	Map.insert name (typ,
+							-- extract types from args
+							map fst args) (getEnvFromMethods tail)
 getEnvFromMethods [] = Map.empty
 
 getEnvFromFields :: [FieldDecl] -> Env
@@ -150,16 +153,26 @@ getTypedStatementExpr lookUp env (New(typ, es)) =
 getTypedStatementExpr lookUp env (MethodCall(e,name,es)) = 
 								let te = getTypedExpression (lookUp) env e in -- type the expression 
 											-- (which returns the class where the method can be found)
-									let typ = (let (fields, methods) = 
+								let tes = getTypedExpressionList (lookUp) env es in
+								let typ = (let (fields, methods) = 
 													-- find the associated class
 													lookUp (getTypeFromExpr te) in
-														-- and lookup the type of the method
-														lookUpMethod methods name )		in
-											TypedStmtExpr(
-												MethodCall(te, name, getTypedExpressionList (lookUp) env es),
-												typ) -- return that type
+														-- lookup the type of the method and check 
+														-- if the argtypes match (errors if not)
+											  let (rTyp, argTyps) = lookUpMethod methods name in
+															typeCheckArgs argTyps (map getTypeFromExpr tes) rTyp
+												) in
+											TypedStmtExpr(MethodCall(te, name, tes), typ) -- return that type
 
 getTypedStatementExpr lookUp env se = se --error ("Unknown ExprStmt: " ++ se)
+
+
+typeCheckArgs :: [Type] -> [Type] -> Type -> Type
+typeCheckArgs (declArgTyp : declArgTyps) (callArgTyp : callArgTyps) rTyp = 
+					if isSubType callArgTyp declArgTyp
+					then typeCheckArgs declArgTyps callArgTyps rTyp
+					else error (typeMissmatchError callArgTyp declArgTyp)
+typeCheckArgs [] [] rTyp = rTyp
 ----------------------------------------------------------------------------------------------------
 
 
@@ -334,9 +347,9 @@ lookUpClass cm typ = case Map.lookup typ cm of
 								Just(c)	-> c
 								Nothing	-> error (typ ++ " cannot be resolved to a type")
 								
-lookUpMethod :: Env -> String -> Type
-lookUpMethod env method = case Map.lookup method env of
-									Just(typ) -> typ
+lookUpMethod :: MethodMap -> String -> (Type, [Type])
+lookUpMethod methods method = case Map.lookup method methods of
+									Just(types) -> types
 									Nothing	 -> error (method ++ " cannot be resolved to a method")
 
 ----------------------------------------------------------------------------------------------------
@@ -423,6 +436,13 @@ testVoidError = [Class("CompareTest",
                             Return(LocalOrFieldVar("a"))
                         ]), True)]
                     )]
+
+testArgError = [Class("ArgTest",
+						[],
+						[Method(voidType, "a", [(intType, "i")], 
+							Block([StmtExprStmt(MethodCall(ClassId("ArgTest"), "a", [Char('a')]))]),
+							True)]
+						)]
 
 main :: IO()
 main = --print $ typecheck testExample
