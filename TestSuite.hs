@@ -7,6 +7,13 @@ import Codegen hiding (main)
 import qualified Text.Show.Pretty as Pr
 
 --Test class to evaluate a void method
+--Java Code
+--    public static void VoidTest()
+--    {
+--        int i;
+--    }
+
+--Haskell Code
 voidClass = [Class("VoidTest",
                 [],
                 [Method("V", "<init>", [], Block[], False),
@@ -17,6 +24,14 @@ voidClass = [Class("VoidTest",
                 )]
 
 --Test class to evaluate the 'this' call
+--Java Code
+--    public static int ThisTest(int i)
+--    {
+--        i = 2;
+--        return i;
+--    }
+
+--Haskell Code
 thisClass = [Class("ThisTest",
                 [FieldDecl("I", "i")],
                 [Method("V", "<init>", [],
@@ -32,71 +47,82 @@ thisClass = [Class("ThisTest",
 
 --Test class to evaluate an addition of two integer
 --Later used in the example program fibNumClass
+--Java Code
+--    public static int AddTest(int i, int j)
+--    {
+--        return(i+j);
+--    }
+
+--Haskell Code
 addClass = [Class("AddTest",
                 [],
                 [Method("V", "<init>", [],
                     Block([
-                            --LocalVarDecl("I", "i"),
-                            --LocalVarDecl("I", "j"),
-                            --StmtExprStmt(Assign(LocalOrFieldVar("i"), Integer(2))), 
-                            --StmtExprStmt(Assign(LocalOrFieldVar("j"), Integer(2)))
-                            --StmtExprStmt(Assign(InstVar(LocalOrFieldVar("this"), "i"), Integer(2))), 
-                            --StmtExprStmt(Assign(InstVar(LocalOrFieldVar("this"), "j"), Integer(2)))
                         ]), False),
                 Method("I", "addMethod", [("I", "i"), ("I", "j")],
                         Block([
-                            --StmtExprStmt(Assign(LocalOrFieldVar("i"), Integer(2))), 
-                            --StmtExprStmt(Assign(LocalOrFieldVar("j"), Integer(3))),
                             Return(Binary("+", LocalOrFieldVar("i"), LocalOrFieldVar("j")))
                             ]), True)]
                 )]
 
 --Test class to evaluate the subtraction of two integer
---Later used in the example program fibNumClass                
+--Later used in the example program fibNumClass
+--Java Code
+--    public static int SubTest(int i, int j)
+--    {
+--        return(i-j);
+--    }
+
+--Haskell Code               
 subClass = [Class("SubTest",
             [],
                 [Method("V", "<init>", [],
                     Block([
-                            --StmtExprStmt(Assign(InstVar(LocalOrFieldVar("this"), "i"), Integer(2))),
-                            --StmtExprStmt(Assign(InstVar(LocalOrFieldVar("this"), "j"), Integer(2)))
                         ]), False),
             Method("I", "subMethod", [("I", "i"), ("I", "j")],
                     Block([
-                        --StmtExprStmt(Assign(LocalOrFieldVar("i"), Integer(2))), 
-                        --StmtExprStmt(Assign(LocalOrFieldVar("j"), Integer(3))),
                         Return(Binary("-", LocalOrFieldVar("i"), LocalOrFieldVar("j")))
                         ]), True)]
                  )]
                  
 --Test class to evaluate the multiplication of two integer
+--Java Code
+--    public static int MultTest(int i, int j)
+--    {
+--        return(i*j);
+--    }
+
+--Haskell Code
 multClass = [Class("MultTest",
                 [FieldDecl("I", "i"), FieldDecl("I", "j")],
                 [Method("V", "<init>", [],
                     Block([
-                            StmtExprStmt(Assign(LocalOrFieldVar("i"), Integer(2))), 
-                            StmtExprStmt(Assign(LocalOrFieldVar("j"), Integer(2)))
                         ]), False),
                 Method("I", "multMethod", [],
                         Block([
-                            --StmtExprStmt(Assign(LocalOrFieldVar("i"), Integer(2))), 
-                            --StmtExprStmt(Assign(LocalOrFieldVar("j"), Integer(3))),
                             Return(Binary("*", LocalOrFieldVar("i"), LocalOrFieldVar("j")))
                             ]), True)]
                  )]
                  
 --Test class to evaluate the division of two Integer
 --Check whether the divisor is zero is in place
+--Java 
+--    public static int DivTest(int i, int j)
+--    {
+--        if (j!= 0)
+--            return(i/j);
+--        else 
+--            return 0;
+--    }
+
+--Haskell Code
 divClass = [Class("divTest",
                 [FieldDecl("I", "i"), FieldDecl("I", "j")],
                 [Method("V", "<init>", [],
                     Block([
-                            StmtExprStmt(Assign(LocalOrFieldVar("i"), Integer(2))), 
-                            StmtExprStmt(Assign(LocalOrFieldVar("j"), Integer(2)))
                         ]), False),
                 Method("I", "divMethod", [],
                         Block([
-                            --StmtExprStmt(Assign(LocalOrFieldVar("i"), Integer(2))), 
-                            --StmtExprStmt(Assign(LocalOrFieldVar("j"), Integer(3))),
                             If(Binary("!=", LocalOrFieldVar("j"), Integer(0)),
                                 Return(Binary("/", LocalOrFieldVar("i"), LocalOrFieldVar("j"))),
                                 Just(Return(Integer(0))))
@@ -104,6 +130,21 @@ divClass = [Class("divTest",
                  )]
                  
 --Test class to evaluate whether two integer have the same value
+--Java Code
+--    public static boolean EquIntTest(int i, int j)
+--    {
+--        int k;
+--        int l;
+--        k = i;
+--        l = j;
+--        
+--        if (k == l)
+--            return true;
+--        else 
+--            return false;
+--    }
+
+--Haskell Code
 equIntClass = [Class("EquIntTest",
                     [FieldDecl("I", "i"), FieldDecl("I", "j")],
                     [Method("V", "<init>", [], 
@@ -126,6 +167,21 @@ equIntClass = [Class("EquIntTest",
                     )]
                  
 --Test class to evaluate whether two boolean have the same value
+--Java Code
+--    public static boolean EquBolTest(boolean i, boolean j)
+--    {
+--        boolean k;
+--        boolean l;
+--        k = i;
+--        l = j;
+--        
+--        if (k == l)
+--            return true;
+--        else 
+--            return false;
+--    }
+
+--Haskell Code
 equBolClass = [Class("EquBolTest",
                 [FieldDecl("Z", "i")],
                 [Method("V", "<init>", [],
@@ -144,6 +200,21 @@ equBolClass = [Class("EquBolTest",
                 )]
                  
 --Test class to evaluate whether one of two integer has a greater value than the other
+--Java Code
+--    public static boolean GretTest(int i, int j)
+--    {
+--       int k;
+--       int l;
+--       k = i;
+--       l = j;
+--       
+--       if (i > j)
+--           return true;
+--       else
+--           return false;
+--    }
+
+--Haskell Code
 gretClass = [Class("GretTest",
                 [FieldDecl("I", "i"), FieldDecl("I", "j")],
                 [Method("V", "<init>", [],
@@ -166,6 +237,21 @@ gretClass = [Class("GretTest",
                 )]
                  
 --Test class to evaluate whether one of two integer has a lesser value than the other
+--Java Code
+--    public static boolean LestTest(int i, int j)
+--    {
+--       int k;
+--       int l;
+--       k = i;
+--       l = j;
+--       
+--       if (i < j)
+--           return true;
+--       else
+--           return false;
+--    }
+
+--Haskell Code
 lestClass = [Class("LestTest",
                 [FieldDecl("I", "i"), FieldDecl("I", "j")],
                 [Method("V", "<init>", [], 
@@ -186,7 +272,20 @@ lestClass = [Class("LestTest",
                                 Just(Return(Bool False)))
                             ]), True)]
                 )]
-                 
+
+--Test Class to evaluate a while statement
+--Java Code
+--    public static int WhileTest(int x)
+--    {
+--        int i = 0;
+--        
+--        while(i < x)
+--            i = i + 1;
+--        
+--        return i;
+--    }
+
+--Haskell Code
 whileClass = [Class("WhileTest",
                 [FieldDecl("I", "x")],
                 [Method("V", "<init>", [],
@@ -209,8 +308,50 @@ whileClass = [Class("WhileTest",
 
 
 --Test program to calculate the n's Fibonacci number in either the positive or negative
+--Java Code
+--public static int FibNumbers(int z)
+--    {
+--        int x = 1;
+--        int y = 1;
+--        //int z = 0;
+--        boolean pn = true;
+--        
+--        if (z > 2)
+--        {    
+--            int i = 0;
+--            if (pn == true)
+--            {
+--                while(i <= (z-2))
+--                {
+--                    int temp = y;
+--                    y = x;
+--                    x = Fibonacci.AddTest(x, temp);//x + temp;
+--                    i++;
+--                }
+--            }
+--            else
+--            {
+--                while(i <= (z-2))
+--                {
+--                    int temp = y;
+--                    y = x;
+--                    x = Fibonacci.SubTest(temp, x);
+--                    i++;
+--                }
+--            }
+--        }
+--        else
+--        {
+--            x = 1;
+--        }
+--        
+--        return x;
+--        
+--    }
+
+--Haskell Code
 fibNumClass = [head addClass, head subClass, Class("FibNumbers",
-                    [], --FieldDecl("AddTest", "add"), FieldDecl("SubTest", "sub")
+                    [],
                     [Method("V", "<init>", [],
                         Block([
                               LocalVarDecl("I", "i"),
@@ -225,19 +366,10 @@ fibNumClass = [head addClass, head subClass, Class("FibNumbers",
                               StmtExprStmt(Assign(LocalOrFieldVar("k"), Integer(0))), 
                               LocalVarDecl("I", "temp"),
                               StmtExprStmt(Assign(LocalOrFieldVar("temp"), LocalOrFieldVar("j")))
-                              --StmtExprStmt(Assign(LocalOrFieldVar("add"), 
-                              --    StmtExprExpr(New("AddTest", [])))),
-                              --StmtExprStmt(Assign(LocalOrFieldVar("sub"), 
-                              --    StmtExprExpr(New("SubTest", []))))
                         ]), False),
                     Method("I", "fibMethod",
                         [],
                         Block([
-                            --Creation of used methods with new Statement
-                            --StmtExprStmt(Assign(LocalOrFieldVar("add"), 
-                            --    StmtExprExpr(New("AddTest", [])))),
-                            --StmtExprStmt(Assign(LocalOrFieldVar("sub"), 
-                            --    StmtExprExpr(New("SubTest", [])))),
                             --Creation of the local variables and subsequent assignment of values
                             LocalVarDecl("I", "i"), -- first Fibonacci number
                             LocalVarDecl("I", "j"), -- second Fibonacci number
@@ -296,30 +428,30 @@ main = do
     putStrLn $ Pr.ppShow $ getConstantsCpEntries $ head $ typecheck equIntClass
     putStrLn $ Pr.ppShow $ get_CP_Map $ head $ typecheck equIntClass
     putStrLn $ Pr.ppShow $ get_CP_Infos $ head $ typecheck equIntClass
-    --putStrLn $ Pr.ppShow $ codegen $ head $ typecheck equIntClass
-    --putStrLn $ Pr.ppShow $ compIntClass
-    --putStrLn $ Pr.ppShow $ codegen $ head $ typecheck compareIntClass
+    putStrLn $ Pr.ppShow $ codegen $ head $ typecheck equIntClass
+    putStrLn $ Pr.ppShow $ compIntClass
+    putStrLn $ Pr.ppShow $ codegen $ head $ typecheck compareIntClass
     putStrLn $ Pr.ppShow $ whileClass
-    --putStrLn $ Pr.ppShow $ codegen $ head $ typecheck whileClass
+    putStrLn $ Pr.ppShow $ codegen $ head $ typecheck whileClass
     putStrLn $ Pr.ppShow $ voidClass
-    --putStrLn $ Pr.ppShow $ codegen $ head $ typecheck voidClass
+    putStrLn $ Pr.ppShow $ codegen $ head $ typecheck voidClass
     putStrLn $ Pr.ppShow $ thisClass
-    --putStrLn $ Pr.ppShow $ codegen $ head $ typecheck thisClass
+    putStrLn $ Pr.ppShow $ codegen $ head $ typecheck thisClass
     putStrLn $ Pr.ppShow $ addClass
-    --putStrLn $ Pr.ppShow $ codegen $ head $ typecheck addClass
+    putStrLn $ Pr.ppShow $ codegen $ head $ typecheck addClass
     putStrLn $ Pr.ppShow $ subClass
-    --putStrLn $ Pr.ppShow $ codegen $ head $ typecheck subClass
+    putStrLn $ Pr.ppShow $ codegen $ head $ typecheck subClass
     putStrLn $ Pr.ppShow $ multClass
-    --putStrLn $ Pr.ppShow $ codegen $ head $ typecheck multClass
+    putStrLn $ Pr.ppShow $ codegen $ head $ typecheck multClass
     putStrLn $ Pr.ppShow $ divClass
-    --putStrLn $ Pr.ppShow $ codegen $ head $ typecheck divClass
+    putStrLn $ Pr.ppShow $ codegen $ head $ typecheck divClass
     putStrLn $ Pr.ppShow $ equBolClass
-    --putStrLn $ Pr.ppShow $ codegen $ head $ typecheck equBolClass
+    putStrLn $ Pr.ppShow $ codegen $ head $ typecheck equBolClass
     putStrLn $ Pr.ppShow $ equIntClass
-    --putStrLn $ Pr.ppShow $ codegen $ head $ typecheck equIntClass
+    putStrLn $ Pr.ppShow $ codegen $ head $ typecheck equIntClass
     putStrLn $ Pr.ppShow $ gretClass
-    --putStrLn $ Pr.ppShow $ codegen $ head $ typecheck gretClass
+    putStrLn $ Pr.ppShow $ codegen $ head $ typecheck gretClass
     putStrLn $ Pr.ppShow $ lestClass
-    --putStrLn $ Pr.ppShow $ codegen $ head $ typecheck lestClass
+    putStrLn $ Pr.ppShow $ codegen $ head $ typecheck lestClass
     putStrLn $ Pr.ppShow $ fibNumClass
-    --putStrLn $ Pr.ppShow $ codegen $ head $ typecheck fibNumClass
+    putStrLn $ Pr.ppShow $ codegen $ head $ typecheck fibNumClass
