@@ -22,19 +22,24 @@ associated types.
 Then it processes each class first creating an evnvironment which contains all fields of this class.
 Later local variables are added to env. The ClassMap and Env are threaded through all recursive
 computations.
-For each class 
+For each class it "iterates" over the methods and recursively typechecks its body consisting
+of statements, expresssions and statement expressions.
+
 -}
 
 
 --Program-------------------------------------------------------------------------------------------
+-- typecheck the whole program
 typecheck :: Prg -> Prg
 typecheck p = getTypedClassList (getClassMap p) p
 
+-- returns a map conataining all fields and methods of all classes
 getClassMap :: Prg -> ClassMap
 getClassMap (Class(typ, fields, methods) : tail) = 
 	Map.insert typ (getEnvFromFields fields, getEnvFromMethods methods) (getClassMap tail)
 getClassMap [] = Map.empty
 
+-- typechecks all classes
 getTypedClassList :: ClassMap -> Prg -> Prg
 getTypedClassList cm (c : tail) = 
 	getTypedClass
@@ -47,6 +52,7 @@ getTypedClassList cm [] = []
 
 
 --Classes-------------------------------------------------------------------------------------------
+-- typechecks one class
 getTypedClass :: LookUp -> Class -> Class
 getTypedClass lookUp (Class(typ, fields, methods)) = Class (
 	typ,
@@ -58,6 +64,7 @@ getTypedClass lookUp (Class(typ, fields, methods)) = Class (
 				(let (fields, methods) = lookUp typ in fields))) 
 		methods     )
 
+-- returns the MethodMap
 getEnvFromMethods :: [MethodDecl] -> MethodMap
 getEnvFromMethods (Method(typ, name, args, _, _) : tail) =
 	Map.insert name (typ,
@@ -65,6 +72,7 @@ getEnvFromMethods (Method(typ, name, args, _, _) : tail) =
 							map fst args) (getEnvFromMethods tail)
 getEnvFromMethods [] = Map.empty
 
+-- returns an Env containing all fields
 getEnvFromFields :: [FieldDecl] -> Env
 getEnvFromFields (FieldDecl(typ, name) : tail) = 
 	Map.insert name typ (getEnvFromFields tail)
@@ -74,6 +82,7 @@ getEnvFromFields [] = Map.empty
 
 
 --Methods-------------------------------------------------------------------------------------------
+-- typechecks a list of methods
 getTypedMethods :: LookUp -> Env -> [MethodDecl] -> [MethodDecl]
 getTypedMethods lookUp env (Method(typ, name, args, body, static) : methods) =
 	let newEnv = Map.union (getEnvFromArgList args) env in -- notice that args possibly override env
@@ -81,11 +90,13 @@ getTypedMethods lookUp env (Method(typ, name, args, body, static) : methods) =
 		: getTypedMethods (lookUp) env methods
 getTypedMethods lookUp env [] = []
 
+-- creates an Env from a list of arguments
 getEnvFromArgList :: [(Type,String)] -> Env
 getEnvFromArgList ((typ, name) : tail) =
 	Map.insert name typ (getEnvFromArgList tail)
 getEnvFromArgList [] = Map.empty
 
+-- typechecks the method body
 getTypedMethodBody :: LookUp -> Env -> Type -> Stmt -> Stmt
 getTypedMethodBody lookUp env typ b@(Block(_)) = 
 								let (s, newEnv) = (getTypedStatement (lookUp) env typ b) in s
@@ -99,6 +110,8 @@ getTypedMethodBody lookUp env typ s = s -- This should never happen!
 -- LookUp contains all classes with their fields and methods
 -- Env contains all local variables
 -- Type is the return type of the surrounding method
+
+-- typechecks a list of statements (= Block)
 getTypedStatementList :: LookUp -> Env -> Type -> [Stmt] -> [Stmt]
 getTypedStatementList lookUp env typ (s : tail) = let 
 															(newS, newEnv) = getTypedStatement (lookUp) env typ s in 
@@ -106,9 +119,7 @@ getTypedStatementList lookUp env typ (s : tail) = let
 																		(lookUp) (Map.union newEnv env) typ tail)
 getTypedStatementList lookUp typ env [] = []
 
--- LookUp contains all classes with their fields and methods
--- Env contains all local variables
--- Type is the return type of the surrounding method
+-- typechecks a single statement
 getTypedStatement :: LookUp -> Env -> Type -> Stmt -> (Stmt, Env)
 getTypedStatement lookUp env typ (Block(sl)) = (Block(getTypedStatementList (lookUp) env typ sl), env)
 getTypedStatement lookUp env typ (Return(e)) = let te = getTypedExpression (lookUp) env e in
@@ -145,7 +156,7 @@ getTypedStatement lookUp env typ (StmtExprStmt(se)) =
 
 
 --StatementExpressions------------------------------------------------------------------------------
--- classes, vars, StmtExpr
+-- typechecks a single statement expression
 getTypedStatementExpr :: LookUp -> Env -> StmtExpr -> StmtExpr
 getTypedStatementExpr lookUp env (Assign(var, e)) = let te = getTypedExpression (lookUp) env e in
 																	 let tvar = getTypedExpression (lookUp) env var in
@@ -186,13 +197,13 @@ typeCheckArgs _ _ _ = error wrongNumberOfArgumentsError
 
 
 --Expressions---------------------------------------------------------------------------------------
--- classes, vars, list of expressions
+-- typechecks a list of expressions (for method calls)
 getTypedExpressionList :: LookUp -> Env -> [Expr] -> [Expr]
 getTypedExpressionList lookUp env (e : tail) =
 		getTypedExpression (lookUp) env e : getTypedExpressionList (lookUp) env tail
 getTypedExpressionList lookUp env [] = []
 
--- classes, vars, expression
+-- typechecks a single expression
 getTypedExpression :: LookUp -> Env -> Expr -> Expr
 getTypedExpression lookUp env this@(This) = TypedExpr(this, lookUpVariable env thisString)
 getTypedExpression lookUp env super@(Super) = TypedExpr(super, lookUpVariable env superString)
@@ -234,12 +245,13 @@ getTypedExpression lookUp env (StmtExprExpr(se)) =
 getTypedExpression lookUp env e = e --error ("Unknown Expression: " ++ e)
 
 -- <<,>>,>>>: lvalue
--- *,/: "bigger" type
+-- *,/,+,-: "bigger" type
 -- %: integer
 -- <,>,<=,>=,instanceof,==,!=: boolean
 -- &,|,^: lvalue, rvalue (either integer type or boolean)
 -- &&, ||: boolean
 
+-- returns the return type of an binary operator
 -- operator, left type, right type
 getTypeByOperator :: String -> Type -> Type -> Type
 getTypeByOperator op t1 t2 = 
@@ -301,29 +313,36 @@ isSubType t1 t2 = if 		t2 == intType 		then t1 == intType || t1 == charType
 						else if 	t2 == objectType	then t1 /= intType && t1 /= charType && t1 /= booleanType
 						else 									  t2 == t1
 
+-- returns true iff the the type is a number type
 isNumberType :: Type -> Bool
 isNumberType typ = typ == charType || typ == intType
 
+-- checks if the operator is an unary operator for numbers
 isNumberOperator :: String -> Bool
 isNumberOperator op = op == plus || op == minus || op == plusPlus || op == minusMinus
 											|| op == multiplication || op == division || op == modulo
 
+-- checks if the operator is an unary operator for booleans
 isBooleanOperator :: String -> Bool
 isBooleanOperator op = op == booleanNot || op == instanceOf || op == equals || op == unequal
 									|| op == and1 || op == and2 || op == or1 || op == or2 || op == xor
 
+-- check if both operands are of ineger type and returns t1
 checkShiftTypes :: String -> Type -> Type -> Type
 checkShiftTypes op t1 t2 = if isIntegerType t1 && isIntegerType t2 then t1
-								 	else error (operatorError op t1 t2)
+									else error (operatorError op t1 t2)
 
+-- checks if both operands are number types and returns the greater type
 checkArithmeticTypes :: String -> Type -> Type -> Type
 checkArithmeticTypes op t1 t2 = if isNumberType t1 && isNumberType t2 then greaterType t1 t2
 										  else error (operatorError op t1 t2)
 
+-- checks if both operands are number types and returns booleanType
 checkNumberTypes :: String -> Type -> Type -> Type
 checkNumberTypes op t1 t2 = if isNumberType t1 && isNumberType t2 then booleanType
 									 else error (operatorError op t1 t2)
 
+-- checks if the operands can be tested of (un)equality
 checkEqualsOp :: String -> Type -> Type -> Type
 checkEqualsOp op t1 t2 = if (isPrimitiveType t1 && isPrimitiveType t2
 										&& (isSubType t1 t2 || isSubType t2 t1))
@@ -331,13 +350,15 @@ checkEqualsOp op t1 t2 = if (isPrimitiveType t1 && isPrimitiveType t2
 								 then booleanType
 								 else error (operatorError op t1 t2)
 
+-- checks if both operands are of boolean type
 checkBooleanOp :: String -> Type -> Type -> Type
 checkBooleanOp op t1 t2 = if t1 == booleanType && t2 == booleanType then t1
 								  else error (operatorError op t1 t2)
-
+-- returns true iff the type is an integer type (int, char)
 isIntegerType :: Type -> Bool
 isIntegerType typ = typ == intType || typ == charType
 
+-- returns true iff the type is not a "Class-Type"
 isPrimitiveType :: Type -> Bool
 isPrimitiveType t = t == booleanType || isNumberType t
 ----------------------------------------------------------------------------------------------------
@@ -383,83 +404,3 @@ notVoidReturnError = "Void methods cannot return a value"
 wrongNumberOfArgumentsError :: String
 wrongNumberOfArgumentsError = "Wrong number of arguments provided"
 ----------------------------------------------------------------------------------------------------
-
-
-
-testInstVarsAndAssign = [
-		Class("A", [FieldDecl(intType, "i"), FieldDecl("B", "x")],
-			[Method(voidType, "test", [], Block([
-														StmtExprStmt(Assign(InstVar(LocalOrFieldVar("this"), "i"), 
-																					InstVar(LocalOrFieldVar("x"), "j")))]), False)]),
-		Class("B",[FieldDecl(intType, "j")],[])
-	]
-
-testOperators = [
-	Class("Operators", [
-			FieldDecl(intType, "i"),
-			FieldDecl(charType, "c"),
-			FieldDecl(booleanType, "b")
-		],
-		[Method(voidType, "ops",[],Block([
-				StmtExprStmt(Assign(LocalOrFieldVar("i"), Binary(shiftL, Integer(1), Integer(2)))),
-				StmtExprStmt(Assign(LocalOrFieldVar("i"), Binary(shiftR2, Integer(1), Integer(2)))),
-				StmtExprStmt(Assign(LocalOrFieldVar("i"), Binary(shiftR3, Integer(1), Integer(2)))),
-			
-				StmtExprStmt(Assign(LocalOrFieldVar("i"), Binary(multiplication, Integer(1), Integer(2)))),
-				StmtExprStmt(Assign(LocalOrFieldVar("i"), Binary(division, Integer(1), Integer(2)))),
-				StmtExprStmt(Assign(LocalOrFieldVar("i"), Binary(modulo, Integer(1), Integer(2)))),
-				
-				StmtExprStmt(Assign(LocalOrFieldVar("b"), Binary(lessThan, Integer(1), Integer(2)))),
-				StmtExprStmt(Assign(LocalOrFieldVar("b"), Binary(lessOrEqual, Integer(1), Integer(2)))),
-				StmtExprStmt(Assign(LocalOrFieldVar("b"), Binary(greaterOrEqual, Integer(1), Integer(2)))),
-				StmtExprStmt(Assign(LocalOrFieldVar("b"), Binary(greaterThan, Integer(1), Integer(2)))),
-				StmtExprStmt(Assign(LocalOrFieldVar("b"), Binary(equals, Integer(1), Integer(2)))),
-				StmtExprStmt(Assign(LocalOrFieldVar("b"), Binary(unequal, Integer(1), Integer(2)))),
-				
-				StmtExprStmt(Assign(LocalOrFieldVar("i"), Binary(and1, Integer(1), Integer(2)))),
-				StmtExprStmt(Assign(LocalOrFieldVar("b"), Binary(and1, Bool(True), Bool(False)))),
-				StmtExprStmt(Assign(LocalOrFieldVar("i"), Binary(or1, Integer(1), Integer(2)))),
-				StmtExprStmt(Assign(LocalOrFieldVar("b"), Binary(or1, Bool(True), Bool(False)))),
-				StmtExprStmt(Assign(LocalOrFieldVar("i"), Binary(xor, Integer(1), Integer(2)))),
-				StmtExprStmt(Assign(LocalOrFieldVar("b"), Binary(xor, Bool(True), Bool(False)))),
-				StmtExprStmt(Assign(LocalOrFieldVar("b"), Binary(and2, Bool(True), Bool(False)))),
-				StmtExprStmt(Assign(LocalOrFieldVar("b"), Binary(or2, Bool(True), Bool(False))))
-			]), False)])
-	]
-
-testStatic = [
-		Class("A", [], [ Method(voidType, "staticMethod", [], Block([]), True) ]),
-		Class("B", [], [ Method(voidType, "callStaticMethod", [], Block([
-								StmtExprStmt(MethodCall(ClassId("A"), "staticMethod", [])) ]), True) ])
-	]
-
-testError = Block([
-						LocalVarDecl(objectType, "x"),
-						StmtExprStmt(Assign(LocalOrFieldVar("x"), ClassId("B") ))])
-
-testVoidError = [Class("CompareTest",
-                    [FieldDecl("IfTest", "a")],
-                    [Method(voidType, "compareMethod",
-                        [],
-                        Block([
-                            StmtExprStmt(Assign(LocalOrFieldVar("a"), 
-                                StmtExprExpr(New("IfTest", [Integer(3), Integer(2)])))),
-                            Return(LocalOrFieldVar("a"))
-                        ]), True)]
-                    )]
-
-testArgError = [Class("ArgTest",
-						[],
-						[Method(voidType, "a", [(intType, "i")], 
-							Block([StmtExprStmt(MethodCall(ClassId("ArgTest"), "a", [Char('a'), Char('b') ]))]),
-							True)]
-						)]
-
-main :: IO()
-main = --print $ typecheck testExample
-	putStrLn $ Pr.ppShow $ typecheck testInstVarsAndAssign
-	--print $ getTypedStatement (\ a -> (Map.empty, Map.empty)) (Map.fromList [("j", intType)]) testBlock
-	--print $ getTypedMethodBody (\ a -> (Map.empty, Map.empty)) Map.empty testBlock2
-	--print $ getTypedMethods (\ a -> (Map.empty, Map.empty)) Map.empty [test]
-	--print $ getTypedExpression (\ a -> (Map.empty, Map.empty)) Map.empty (Binary("==", Jnull, Integer(1)))
-
