@@ -89,33 +89,33 @@ getConstantsHTH (l:xl) s = Map.union t (getConstantsHTH xl ((s + (Map.size t))))
   where t = getConstantsHTHH l s
 
 getConstantsHTHH :: Stmt -> Int -> Map String Int
-getConstantsHTHH (Block([]))                    s = Map.empty 
-getConstantsHTHH (Block(stmt:stmts))            s = Map.union t (getConstantsHTH stmts (s + (Map.size t))) where t = getConstantsHTHH stmt s              
-getConstantsHTHH (Return(e)) s                    = getConstantsHTHHE e s
-getConstantsHTHH ReturnV                        s = Map.empty
-getConstantsHTHH (While(expr, stmt))            s = Map.union t (getConstantsHTHH stmt (s + (Map.size t))) where t = getConstantsHTHHE expr s
-getConstantsHTHH (LocalVarDecl(typ, str))       s = Map.empty
+getConstantsHTHH (Block([]))                      s = Map.empty 
+getConstantsHTHH (Block(stmt:stmts))              s = Map.union t (getConstantsHTH stmts (s + (Map.size t))) where t = getConstantsHTHH stmt s              
+getConstantsHTHH (Return(e)) s                      = getConstantsHTHHE e s
+getConstantsHTHH ReturnV                          s = Map.empty
+getConstantsHTHH (While(expr, stmt))              s = Map.union t (getConstantsHTHH stmt (s + (Map.size t))) where t = getConstantsHTHHE expr s
+getConstantsHTHH (LocalVarDecl(typ, str))         s = Map.empty
 getConstantsHTHH (If(expr, stmt, Just(stmtElse))) s = Map.union t1 t2 where 
   t1 = getConstantsHTHH stmt s
   t2 = getConstantsHTHH stmtElse (s + (Map.size t1))
-getConstantsHTHH (If(expr, stmt, Nothing))      s = getConstantsHTHH stmt s
-getConstantsHTHH (StmtExprStmt(stmtExpr))       s = getConstantsHTHHS stmtExpr s
+getConstantsHTHH (If(expr, stmt, Nothing))        s = getConstantsHTHH stmt s
+getConstantsHTHH (StmtExprStmt(stmtExpr))         s = getConstantsHTHHS stmtExpr s
 
 getConstantsHTHHE :: Expr -> Int -> Map String Int
-getConstantsHTHHE This                         s = Map.empty
-getConstantsHTHHE Super                        s = Map.empty
-getConstantsHTHHE (LocalOrFieldVar v)          s = Map.empty
---getConstantsHTHHE (LocalOrFieldVar v)          s = Map.fromList [("var:" ++ v, s)]
-getConstantsHTHHE (InstVar (expr, str))        s = getConstantsHTHHE expr s
-getConstantsHTHHE (Unary (str, expr))          s = getConstantsHTHHE expr s
-getConstantsHTHHE (Binary (str, expr1, expr2)) s = Map.union t (getConstantsHTHHE expr2 (s + (Map.size t))) where t = getConstantsHTHHE expr1 s
-getConstantsHTHHE (Integer i)                  s = Map.fromList [(show i, s)]
-getConstantsHTHHE (Bool b)                     s = Map.empty
-getConstantsHTHHE (Char c)                     s = Map.fromList [(show c, s)]
-getConstantsHTHHE (String s1)                  s = Map.fromList [(s1, s+1), (stringReferenceType ++ ":" ++ (show (s+1)), s)]
-getConstantsHTHHE (Jnull)                      s = Map.empty
-getConstantsHTHHE (StmtExprExpr(stmtExpr))     s = getConstantsHTHHS stmtExpr s
-getConstantsHTHHE (TypedExpr(expr, typ))       s = Map.fromList $ map (\(s, i) -> ((typ ++ ":" ++ s), i)) $ Map.toList $ getConstantsHTHHE expr s
+getConstantsHTHHE This                            s = Map.empty
+getConstantsHTHHE Super                           s = Map.empty
+getConstantsHTHHE (LocalOrFieldVar v)             s = Map.empty
+--getConstantsHTHHE (LocalOrFieldVar v)             s = Map.fromList [("var:" ++ v, s)]
+getConstantsHTHHE (InstVar (expr, str))           s = getConstantsHTHHE expr s
+getConstantsHTHHE (Unary (str, expr))             s = getConstantsHTHHE expr s
+getConstantsHTHHE (Binary (str, expr1, expr2))    s = Map.union t (getConstantsHTHHE expr2 (s + (Map.size t))) where t = getConstantsHTHHE expr1 s
+getConstantsHTHHE (Integer i)                     s = Map.fromList [(show i, s)]
+getConstantsHTHHE (Bool b)                        s = Map.empty
+getConstantsHTHHE (Char c)                        s = Map.fromList [(show c, s)]
+getConstantsHTHHE (String s1)                     s = Map.fromList [(s1, s+1), (stringReferenceType ++ ":" ++ (show (s+1)), s)]
+getConstantsHTHHE (Jnull)                         s = Map.empty
+getConstantsHTHHE (StmtExprExpr(stmtExpr))        s = getConstantsHTHHS stmtExpr s
+getConstantsHTHHE (TypedExpr(expr, typ))          s = Map.fromList $ map (\(s, i) -> ((typ ++ ":" ++ s), i)) $ Map.toList $ getConstantsHTHHE expr s
 
 getConstantsHTHHS :: StmtExpr -> Int -> Map String Int
 getConstantsHTHHS (Assign(e1, e2)) s = getConstantsHTHHE e2 s
@@ -296,9 +296,10 @@ compileStmt ReturnV                          ht locals sh = (["return"], locals,
 compileStmt (While(expr, stmt))              ht locals sh = 
   let (codeIf, locals1, sh1) = compileExpr expr ht locals sh
       (codeBody, locals2, sh2) = compileStmt stmt ht locals1 sh1
-      jumplength = (length codeBody) + (length codeIf) + 1
+      jumplength  = (length codeBody)
+      jumplength2 = (length codeBody) + (length codeIf) + 1
   -- while con do stuff == if(!con) jump; stuff; if(con) -jump
-  in (codeIf ++ ["ifeq " ++ show (jumplength), "PHCL", "PHCL"] ++ codeBody ++ codeIf ++ ["ifne " ++ show (-jumplength), "PHCL", "PHCL"], locals2,  max sh1 sh2)
+  in (codeIf ++ ["ifeq " ++ show (jumplength), "PHCL", "PHCL"] ++ codeBody ++ codeIf ++ ["ifne " ++ show (-jumplength2), "PHCL", "PHCL"], locals2,  max sh1 sh2)
 compileStmt (LocalVarDecl(typ, str))         ht locals sh = ([], Map.insert (str) (Map.size locals) locals, sh)
 compileStmt (If(expr, stmt, mbStmt))         ht locals sh = 
   let (codeIf,   locals1, sh1) = compileExpr expr ht locals  sh
@@ -320,17 +321,18 @@ compileExpr (LocalOrFieldVar s)              ht locals sh = case (Map.lookup s l
   Just i ->  (["iload " ++ (show i), "PHCL", "PHCL"], locals, sh + 1)
   Nothing -> (["ldc "   ++ (show $ ht Map.! ("field:" ++ s)), "PHCL", "PHCL"], locals, sh + 1)
 compileExpr (InstVar (expr, str))            ht locals sh = let (code, locals1, sh1) = compileExpr expr ht locals sh in (["instvar: "] ++ code ++ [", " ++ str], locals1, sh1)
-compileExpr (Unary (str, expr))              ht locals sh = let (code, locals1, sh1) = compileExpr expr ht locals sh in (["unary: " ++ str ++ ", "] ++ code, locals1, sh1)
+compileExpr (Unary (str, expr))              ht locals sh = let (code, locals1, sh1) = compileExpr expr ht locals sh in 
+  (["unary: " ++ str ++ ", "] ++ code, locals1, sh1)
 compileExpr (Binary (str, expr1, expr2))     ht locals sh = 
   let (code1, locals1, sh1) = compileExpr expr1 ht locals sh
       (code2, locals2, sh2) = compileExpr expr2 ht locals sh1
-      --bin                   = [str]
       bin                   = case str of
         "==" -> ["ixor", "ineg"] 
-        ">"  -> ["if_icmpgt " ++ (show 4), "PHCL", "PHCL", "iconst_0", "goto 2", "PHCL", "PHCL", "iconst_1"]
-        "<"  -> ["if_icmplt " ++ (show 4), "PHCL", "PHCL", "iconst_0", "goto 2", "PHCL", "PHCL", "iconst_1"]
-        ">=" -> ["if_icmpge " ++ (show 4), "PHCL", "PHCL", "iconst_0", "goto 2", "PHCL", "PHCL", "iconst_1"]
-        "<=" -> ["if_icmple " ++ (show 4), "PHCL", "PHCL", "iconst_0", "goto 2", "PHCL", "PHCL", "iconst_1"]
+        ">"  -> ["if_icmpgt " ++ (show 4), "PHCL", "PHCL", "iconst_0", "goto 4", "PHCL", "PHCL", "iconst_1"]
+        "<"  -> ["if_icmplt " ++ (show 4), "PHCL", "PHCL", "iconst_0", "goto 4", "PHCL", "PHCL", "iconst_1"]
+        ">=" -> ["if_icmpge " ++ (show 4), "PHCL", "PHCL", "iconst_0", "goto 4", "PHCL", "PHCL", "iconst_1"]
+        "<=" -> ["if_icmple " ++ (show 4), "PHCL", "PHCL", "iconst_0", "goto 4", "PHCL", "PHCL", "iconst_1"]
+        "/"  -> ...
         _    -> [str]
   in  (code1 ++ code2 ++ bin, locals, max sh1 sh2)
 compileExpr (Integer i)                      ht locals sh = (["ldc " ++ (show $ ht Map.! ("I:" ++ (show i))), "PHCL", "PHCL"], locals, sh + 1)

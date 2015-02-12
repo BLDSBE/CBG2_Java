@@ -299,27 +299,27 @@ main = do
     --putStrLn $ Pr.ppShow $ codegen $ head $ typecheck equIntClass
     --putStrLn $ Pr.ppShow $ compIntClass
     --putStrLn $ Pr.ppShow $ codegen $ head $ typecheck compareIntClass
-    putStrLn $ Pr.ppShow $ whileClass
+    putStrLn $ Pr.ppShow $ typecheck $ whileClass
     --putStrLn $ Pr.ppShow $ codegen $ head $ typecheck whileClass
-    putStrLn $ Pr.ppShow $ voidClass
+    putStrLn $ Pr.ppShow $ typecheck $ voidClass
     --putStrLn $ Pr.ppShow $ codegen $ head $ typecheck voidClass
-    putStrLn $ Pr.ppShow $ thisClass
+    putStrLn $ Pr.ppShow $ typecheck $ thisClass
     --putStrLn $ Pr.ppShow $ codegen $ head $ typecheck thisClass
-    putStrLn $ Pr.ppShow $ addClass
+    putStrLn $ Pr.ppShow $ typecheck $ addClass
     --putStrLn $ Pr.ppShow $ codegen $ head $ typecheck addClass
-    putStrLn $ Pr.ppShow $ subClass
+    putStrLn $ Pr.ppShow $ typecheck $ subClass
     --putStrLn $ Pr.ppShow $ codegen $ head $ typecheck subClass
-    putStrLn $ Pr.ppShow $ multClass
+    putStrLn $ Pr.ppShow $ typecheck $ multClass
     --putStrLn $ Pr.ppShow $ codegen $ head $ typecheck multClass
-    putStrLn $ Pr.ppShow $ divClass
+    putStrLn $ Pr.ppShow $ typecheck $ divClass
     --putStrLn $ Pr.ppShow $ codegen $ head $ typecheck divClass
-    putStrLn $ Pr.ppShow $ equBolClass
+    putStrLn $ Pr.ppShow $ typecheck $ equBolClass
     --putStrLn $ Pr.ppShow $ codegen $ head $ typecheck equBolClass
-    putStrLn $ Pr.ppShow $ equIntClass
+    putStrLn $ Pr.ppShow $ typecheck $ equIntClass
     --putStrLn $ Pr.ppShow $ codegen $ head $ typecheck equIntClass
-    putStrLn $ Pr.ppShow $ gretClass
+    putStrLn $ Pr.ppShow $ typecheck $ gretClass
     --putStrLn $ Pr.ppShow $ codegen $ head $ typecheck gretClass
-    putStrLn $ Pr.ppShow $ lestClass
+    putStrLn $ Pr.ppShow $ typecheck $ lestClass
     --putStrLn $ Pr.ppShow $ codegen $ head $ typecheck lestClass
-    putStrLn $ Pr.ppShow $ fibNumClass
+    putStrLn $ Pr.ppShow $ typecheck $ fibNumClass
     --putStrLn $ Pr.ppShow $ codegen $ head $ typecheck fibNumClass
