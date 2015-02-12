@@ -91,10 +91,9 @@ getConstantsHTH (l:xl) s = Map.union t (getConstantsHTH xl ((s + (Map.size t))))
 getConstantsHTHH :: Stmt -> Int -> Map String Int
 getConstantsHTHH (Block([]))                    s = Map.empty 
 getConstantsHTHH (Block(stmt:stmts))            s = Map.union t (getConstantsHTH stmts (s + (Map.size t))) where t = getConstantsHTHH stmt s              
-getConstantsHTHH (Return(TypedExpr(expr, typ))) s = getConstantsHTHHE expr s
-getConstantsHTHH (Return(_))                    _ = Map.empty
+getConstantsHTHH (Return(e)) s                    = getConstantsHTHHE e s
 getConstantsHTHH ReturnV                        s = Map.empty
-getConstantsHTHH (While(expr, stmt))            s = getConstantsHTHHE expr s
+getConstantsHTHH (While(expr, stmt))            s = Map.union t (getConstantsHTHH stmt (s + (Map.size t))) where t = getConstantsHTHHE expr s
 getConstantsHTHH (LocalVarDecl(typ, str))       s = Map.empty
 getConstantsHTHH (If(expr, stmt, Just(stmtElse))) s = Map.union t1 t2 where 
   t1 = getConstantsHTHH stmt s
@@ -189,9 +188,8 @@ constantsHTEntryToCP_Info (s, i) = let l = reverse $ splitOn ":" s in
       | typ == stringType           -> [Utf8_Info { tag_cp = TagUtf8, tam_cp = length content, cad_cp = content, desc = "#" ++ (show i) ++ ":" ++ stringType ++ ":" ++ content}]
       | typ == stringReferenceType  -> [String_Info {tag_cp = TagString, index_cp = read content, desc = "#" ++ (show i) ++ ":" ++ typ ++ ":#" ++ content} ]
       | typ == "var"                -> [Utf8_Info { tag_cp = TagUtf8, tam_cp = length content, cad_cp = content, desc = "#" ++ (show i) ++ ":" ++ typ ++ ":" ++ content}]
+      | otherwise                   -> [Utf8_Info { tag_cp = TagUtf8, tam_cp = length content, cad_cp = content, desc = "#" ++ (show i) ++ ":" ++ typ ++ ":" ++ content ++ "!!STRANGE!!"}]
     
-  
- 
 
 
 get_CP_Infos :: Class -> CP_Infos
@@ -351,6 +349,10 @@ compileStmtExpr (Assign(TypedExpr(LocalOrFieldVar var, typ1), TypedExpr(expr1, t
     Just i  -> (code1 ++ ["istore " ++ (show i), "PHCL", "PHCL"], locals1, sh1)
     Nothing -> (["ldc " ++ (show $ (ht Map.! "class:this")), "PHCL", "PHCL"] ++ 
                   code1 ++ ["putfield " ++ (show $ ht Map.! ("field:" ++ var)), "PHCL", "PHCL"], locals1, sh1 + 1)
+compileStmtExpr (Assign(TypedExpr(InstVar(TypedExpr(LocalOrFieldVar clas, clasTyp), var), _), TypedExpr(expr1, typ2))) ht locals sh =
+  let (code1, locals1, sh1) = compileExpr expr1 ht locals sh in 
+    (["ldc " ++ (show $ (ht Map.! ("class:" ++ clas))), "PHCl", "PHCl"] ++
+       code1 ++ ["putfield " ++ (show $ ht Map.! ("field:" ++ var)), "PHCL", "PHCL"], locals1, sh1 + 1)
 
 compileStmtExpr (New(typ, exprs)) ht locals sh = 
   let (code1, locals1, sh1) = compileExprs exprs ht locals sh in 
