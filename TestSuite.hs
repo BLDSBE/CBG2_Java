@@ -1,4 +1,3 @@
-
 module TestSuite where
 
 import Typecheck hiding (main)
@@ -22,25 +21,29 @@ thisClass = [Class("ThisTest",
                 [FieldDecl("I", "i")],
                 [Method("V", "<init>", [],
                     Block[(
-                        StmtExprStmt(Assign(InstVar(LocalOrFieldVar("this"), "i"), Integer(2)))
+                        StmtExprStmt(Assign((LocalOrFieldVar("i"), Integer(2))))
                     )], False),
                 Method("I", "thisMethod", [],
                     Block([
-                        StmtExprStmt(Assign(InstVar(LocalOrFieldVar("this"), "i"), Integer(2))),
-                        Return(InstVar(LocalOrFieldVar("this"), "i"))
+                        StmtExprStmt(Assign(LocalOrFieldVar("i"), Integer(2))),
+                        Return(LocalOrFieldVar("i"))
                     ]), True)]
                     )]
 
 --Test class to evaluate an addition of two integer
 --Later used in the example program fibNumClass
 addClass = [Class("AddTest",
-                [FieldDecl("I", "i"), FieldDecl("I", "j")],
+                [],
                 [Method("V", "<init>", [],
-                    Block[
-                            --(StmtExprStmt(Assign(InstVar(LocalOrFieldVar("this"), "i"), Integer(2))) 
-                            --StmtExprStmt(Assign(InstVar(LocalOrFieldVar("this"), "j"), Integer(2))))
-                        ], False),
-                Method("I", "addMethod", [],
+                    Block([
+                            --LocalVarDecl("I", "i"),
+                            --LocalVarDecl("I", "j"),
+                            --StmtExprStmt(Assign(LocalOrFieldVar("i"), Integer(2))), 
+                            --StmtExprStmt(Assign(LocalOrFieldVar("j"), Integer(2)))
+                            --StmtExprStmt(Assign(InstVar(LocalOrFieldVar("this"), "i"), Integer(2))), 
+                            --StmtExprStmt(Assign(InstVar(LocalOrFieldVar("this"), "j"), Integer(2)))
+                        ]), False),
+                Method("I", "addMethod", [("I", "i"), ("I", "j")],
                         Block([
                             --StmtExprStmt(Assign(LocalOrFieldVar("i"), Integer(2))), 
                             --StmtExprStmt(Assign(LocalOrFieldVar("j"), Integer(3))),
@@ -51,13 +54,13 @@ addClass = [Class("AddTest",
 --Test class to evaluate the subtraction of two integer
 --Later used in the example program fibNumClass                
 subClass = [Class("SubTest",
-            [FieldDecl("I", "i"), FieldDecl("I", "j")],
+            [],
                 [Method("V", "<init>", [],
-                    Block[
-                            --(StmtExprStmt(Assign(InstVar(LocalOrFieldVar("this"), "i"), Integer(2))) 
-                            --StmtExprStmt(Assign(InstVar(LocalOrFieldVar("this"), "j"), Integer(2))))
-                        ], False),
-            Method("I", "subMethod", [],
+                    Block([
+                            --StmtExprStmt(Assign(InstVar(LocalOrFieldVar("this"), "i"), Integer(2))),
+                            --StmtExprStmt(Assign(InstVar(LocalOrFieldVar("this"), "j"), Integer(2)))
+                        ]), False),
+            Method("I", "subMethod", [("I", "i"), ("I", "j")],
                     Block([
                         --StmtExprStmt(Assign(LocalOrFieldVar("i"), Integer(2))), 
                         --StmtExprStmt(Assign(LocalOrFieldVar("j"), Integer(3))),
@@ -69,10 +72,10 @@ subClass = [Class("SubTest",
 multClass = [Class("MultTest",
                 [FieldDecl("I", "i"), FieldDecl("I", "j")],
                 [Method("V", "<init>", [],
-                    Block[
-                            --(StmtExprStmt(Assign(InstVar(LocalOrFieldVar("this"), "i"), Integer(2))) 
-                            --StmtExprStmt(Assign(InstVar(LocalOrFieldVar("this"), "j"), Integer(2))))
-                        ], False),
+                    Block([
+                            StmtExprStmt(Assign(LocalOrFieldVar("i"), Integer(2))), 
+                            StmtExprStmt(Assign(LocalOrFieldVar("j"), Integer(2)))
+                        ]), False),
                 Method("I", "multMethod", [],
                         Block([
                             --StmtExprStmt(Assign(LocalOrFieldVar("i"), Integer(2))), 
@@ -86,10 +89,10 @@ multClass = [Class("MultTest",
 divClass = [Class("divTest",
                 [FieldDecl("I", "i"), FieldDecl("I", "j")],
                 [Method("V", "<init>", [],
-                    Block[
-                            --(StmtExprStmt(Assign(InstVar(LocalOrFieldVar("this"), "i"), Integer(2))) 
-                            --StmtExprStmt(Assign(InstVar(LocalOrFieldVar("this"), "j"), Integer(2))))
-                        ], False),
+                    Block([
+                            StmtExprStmt(Assign(LocalOrFieldVar("i"), Integer(2))), 
+                            StmtExprStmt(Assign(LocalOrFieldVar("j"), Integer(2)))
+                        ]), False),
                 Method("I", "divMethod", [],
                         Block([
                             --StmtExprStmt(Assign(LocalOrFieldVar("i"), Integer(2))), 
@@ -104,12 +107,12 @@ divClass = [Class("divTest",
 equIntClass = [Class("EquIntTest",
                     [FieldDecl("I", "i"), FieldDecl("I", "j")],
                     [Method("V", "<init>", [], 
-                              Block[
-                                  --(LocalVarDecl("I", "k"),
-                                  --LocalVarDecl("I", "l"),
-                                  --StmtExprStmt(Assign(LocalOrFieldVar("k"), LocalOrFieldVar("i"))), 
-                                  --StmtExprStmt(Assign(LocalOrFieldVar("l"), LocalOrFieldVar("j"))))
-                                ], False),
+                              Block([
+                                  LocalVarDecl("I", "k"),
+                                  LocalVarDecl("I", "l"),
+                                  StmtExprStmt(Assign(LocalOrFieldVar("k"), LocalOrFieldVar("i"))), 
+                                  StmtExprStmt(Assign(LocalOrFieldVar("l"), LocalOrFieldVar("j")))
+                                ]), False),
                     Method("Z", "equIntMethod", [],
                             Block([
                                 LocalVarDecl("I", "k"),
@@ -126,10 +129,10 @@ equIntClass = [Class("EquIntTest",
 equBolClass = [Class("EquBolTest",
                 [FieldDecl("Z", "i")],
                 [Method("V", "<init>", [],
-                        Block[
-                                    --(LocalVarDecl("Z", "j"),
-                                    --StmtExprStmt(Assign(LocalOrFieldVar("j"), LocalOrFieldVar("i"))))
-                        ], False),
+                        Block([
+                            LocalVarDecl("Z", "j"),
+                            StmtExprStmt(Assign(LocalOrFieldVar("j"), LocalOrFieldVar("i")))
+                        ]), False),
                 Method("Z", "equBolMethod", [],
                         Block([
                             LocalVarDecl("Z", "j"),
@@ -144,12 +147,12 @@ equBolClass = [Class("EquBolTest",
 gretClass = [Class("GretTest",
                 [FieldDecl("I", "i"), FieldDecl("I", "j")],
                 [Method("V", "<init>", [],
-                        Block[
-                            --(LocalVarDecl("I", "k"),
-                            --LocalVarDecl("I", "l"),
-                            --StmtExprStmt(Assign(LocalOrFieldVar("k"), LocalOrFieldVar("i"))), 
-                            --StmtExprStmt(Assign(LocalOrFieldVar("l"), LocalOrFieldVar("j"))))
-                        ], False),
+                        Block([
+                            LocalVarDecl("I", "k"),
+                            LocalVarDecl("I", "l"),
+                            StmtExprStmt(Assign(LocalOrFieldVar("k"), LocalOrFieldVar("i"))), 
+                            StmtExprStmt(Assign(LocalOrFieldVar("l"), LocalOrFieldVar("j")))
+                        ]), False),
                 Method("Z", "gretMethod", [],
                         Block([
                             LocalVarDecl("I", "k"),
@@ -166,12 +169,12 @@ gretClass = [Class("GretTest",
 lestClass = [Class("LestTest",
                 [FieldDecl("I", "i"), FieldDecl("I", "j")],
                 [Method("V", "<init>", [], 
-                        Block[
-                            --(LocalVarDecl("I", "k"),
-                            --LocalVarDecl("I", "l"),
-                            --StmtExprStmt(Assign(LocalOrFieldVar("k"), LocalOrFieldVar("i"))), 
-                            --StmtExprStmt(Assign(LocalOrFieldVar("l"), LocalOrFieldVar("j"))))
-                        ], False),
+                        Block([
+                            LocalVarDecl("I", "k"),
+                            LocalVarDecl("I", "l"),
+                            StmtExprStmt(Assign(LocalOrFieldVar("k"), LocalOrFieldVar("i"))), 
+                            StmtExprStmt(Assign(LocalOrFieldVar("l"), LocalOrFieldVar("j")))
+                        ]), False),
                 Method("Z", "lestMethod", [],
                         Block([
                             LocalVarDecl("I", "k"),
@@ -187,10 +190,10 @@ lestClass = [Class("LestTest",
 whileClass = [Class("WhileTest",
                 [FieldDecl("I", "x")],
                 [Method("V", "<init>", [],
-                    Block[
-                        --(LocalVarDecl("I", "i"),
-                        --StmtExprStmt(Assign(LocalOrFieldVar("i"), Integer(0))))
-                    ], False),
+                    Block([
+                        LocalVarDecl("I", "i"),
+                        StmtExprStmt(Assign(LocalOrFieldVar("i"), Integer(0)))
+                    ]), False),
                 Method("I", "whileMethod",
                     [("I", "i")],
                     Block([
@@ -199,7 +202,7 @@ whileClass = [Class("WhileTest",
                             Block([
                             StmtExprStmt(Assign(LocalOrFieldVar("i"), Binary("+", LocalOrFieldVar("i"), Integer(1))))
                                 ])), 
-                            Return(LocalOrFieldVar("i"))
+                        Return(LocalOrFieldVar("i"))
                         ]),  True)]
                 )]
                    
@@ -207,34 +210,34 @@ whileClass = [Class("WhileTest",
 
 --Test program to calculate the n's Fibonacci number in either the positive or negative
 fibNumClass = [head addClass, head subClass, Class("FibNumbers",
-                    [FieldDecl("AddTest", "add"), FieldDecl("SubTest", "sub")],
+                    [], --FieldDecl("AddTest", "add"), FieldDecl("SubTest", "sub")
                     [Method("V", "<init>", [],
-                        Block[
-                              --(LocalVarDecl("I", "i"),
-                              --LocalVarDecl("I", "j"),
-                              --LocalVarDecl("I", "z"),
-                              --LocalVarDecl("Z", "b"),
-                              --StmtExprStmt(Assign(LocalOrFieldVar("i"), Integer(1))), 
-                              --StmtExprStmt(Assign(LocalOrFieldVar("j"), Integer(1))),
-                              --StmtExprStmt(Assign(LocalOrFieldVar("z"), Integer(6))),
-                              --StmtExprStmt(Assign(LocalOrFieldVar("b"), Bool(True))),
-                              --LocalVarDecl("I", "k"),
-                              --StmtExprStmt(Assign(LocalOrFieldVar("k"), Integer(0))), 
-                              --LocalVarDecl("I", "temp"),
-                              --StmtExprStmt(Assign(LocalOrFieldVar("temp"), LocalOrFieldVar("j"))), 
+                        Block([
+                              LocalVarDecl("I", "i"),
+                              LocalVarDecl("I", "j"),
+                              LocalVarDecl("I", "z"),
+                              LocalVarDecl("Z", "b"),
+                              StmtExprStmt(Assign(LocalOrFieldVar("i"), Integer(1))), 
+                              StmtExprStmt(Assign(LocalOrFieldVar("j"), Integer(1))),
+                              StmtExprStmt(Assign(LocalOrFieldVar("z"), Integer(6))),
+                              StmtExprStmt(Assign(LocalOrFieldVar("b"), Bool(True))),
+                              LocalVarDecl("I", "k"),
+                              StmtExprStmt(Assign(LocalOrFieldVar("k"), Integer(0))), 
+                              LocalVarDecl("I", "temp"),
+                              StmtExprStmt(Assign(LocalOrFieldVar("temp"), LocalOrFieldVar("j")))
                               --StmtExprStmt(Assign(LocalOrFieldVar("add"), 
                               --    StmtExprExpr(New("AddTest", [])))),
                               --StmtExprStmt(Assign(LocalOrFieldVar("sub"), 
-                              --    StmtExprExpr(New("SubTest", [])))))
-                        ], False),
+                              --    StmtExprExpr(New("SubTest", []))))
+                        ]), False),
                     Method("I", "fibMethod",
                         [],
                         Block([
                             --Creation of used methods with new Statement
-                            StmtExprStmt(Assign(LocalOrFieldVar("add"), 
-                                StmtExprExpr(New("AddTest", [])))),
-                            StmtExprStmt(Assign(LocalOrFieldVar("sub"), 
-                                StmtExprExpr(New("SubTest", [])))),
+                            --StmtExprStmt(Assign(LocalOrFieldVar("add"), 
+                            --    StmtExprExpr(New("AddTest", [])))),
+                            --StmtExprStmt(Assign(LocalOrFieldVar("sub"), 
+                            --    StmtExprExpr(New("SubTest", [])))),
                             --Creation of the local variables and subsequent assignment of values
                             LocalVarDecl("I", "i"), -- first Fibonacci number
                             LocalVarDecl("I", "j"), -- second Fibonacci number
@@ -261,7 +264,7 @@ fibNumClass = [head addClass, head subClass, Class("FibNumbers",
                                                     StmtExprStmt(Assign(LocalOrFieldVar("temp"), LocalOrFieldVar("j"))),
                                                     StmtExprStmt(Assign(LocalOrFieldVar("j"), LocalOrFieldVar("i"))),
                                                     StmtExprStmt(Assign(LocalOrFieldVar("i"),
-                                                        StmtExprExpr(MethodCall(LocalOrFieldVar("add"), "addMethod", 
+                                                        StmtExprExpr(MethodCall(ClassId("AddTest"), "addMethod", 
                                                             [LocalOrFieldVar("i"), LocalOrFieldVar("temp")])))),
                                                     StmtExprStmt(Assign(LocalOrFieldVar("k"), Integer(1)))
                                                     ]))
@@ -274,7 +277,7 @@ fibNumClass = [head addClass, head subClass, Class("FibNumbers",
                                                         StmtExprStmt(Assign(LocalOrFieldVar("temp"), LocalOrFieldVar("j"))),
                                                         StmtExprStmt(Assign(LocalOrFieldVar("j"), LocalOrFieldVar("i"))),
                                                         StmtExprStmt(Assign(LocalOrFieldVar("i"),
-                                                            StmtExprExpr(MethodCall(LocalOrFieldVar("sub"), "subMethod", 
+                                                            StmtExprExpr(MethodCall(ClassId("SubTest"), "subMethod", 
                                                                 [LocalOrFieldVar("temp"), LocalOrFieldVar("i")])))),
                                                         StmtExprStmt(Assign(LocalOrFieldVar("k"), Integer(1)))
                                                         ]))
