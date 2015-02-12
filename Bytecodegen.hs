@@ -8,6 +8,7 @@ import Data.Word
 import Data.List
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.ByteString as BS
+import Data.List.Split
 
 cpToBytecode :: CP_Info -> [Word8]
 cpToBytecode c = case tag_cp c of
@@ -72,6 +73,18 @@ codeToBytecode (sp "ldc " -> Just i)            = [18]  ++ (intToTwoBytes $ read
 codeToBytecode (sp "new " -> Just i)            = [187] ++ (intToTwoBytes $ read i)
 codeToBytecode "nop"                            = [0]
 codeToBytecode (sp "putfield " -> Just i)       = [181] ++ (intToTwoBytes $ read i)
+codeToBytecode (sp "new " -> Just i)            = [187] ++ (intToTwoBytes $ read i)
+codeToBytecode (sp "iinc " -> Just is)          = let (i1:i2:[]) = splitOn " " is in
+  [     132, read i1, read i2]
+codeToBytecode (sp "wide iinc " -> Just is)     = let (i1:i2:[]) = splitOn " " is in
+  [196, 132] ++ (intToTwoBytes $ read i1) ++ (intToTwoBytes $ read i2)
+codeToBytecode "iadd"                           = [96]
+codeToBytecode "isub"                           = [100]
+codeToBytecode "imul"                           = [104]
+codeToBytecode "idiv"                           = [108]
+codeToBytecode "ishl"                           = [120]
+codeToBytecode "ishr"                           = [122]
+codeToBytecode "iushr"                          = [124]
 codeToBytecode "return"                         = [177]
 codeToBytecode "aconst_null"                    = [1]
 codeToBytecode "PHCL"                           = []

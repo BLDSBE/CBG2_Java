@@ -16,7 +16,7 @@ readMaybe s = case reads s of
   [(x, "")] -> Just x
   _ -> Nothing
 
-
+--this all is just recursing through stuff and adding some infos from it.
 namesAndTypes :: Class -> Int -> Map String Int
 namesAndTypes c@(Class(_, [], [])) size = Map.fromList [("nat:<init>:()V", size)]
 
@@ -77,7 +77,7 @@ getMethodHT (Class(cname, f, (Method(typ, name, _, _, body)):ml)) size =
 
 
 
-
+--recurse through Methods.
 getConstantsHT :: [MethodDecl] -> Int -> Map String Int
 getConstantsHT [] _ = Map.empty
 getConstantsHT (Method(_, _, _, code, _):r) s = Map.union t (getConstantsHT r (s + 1 +(Map.size t)))
@@ -120,6 +120,7 @@ getConstantsHTHHE (TypedExpr(expr, typ))          s = Map.fromList $ map (\(s, i
 getConstantsHTHHS :: StmtExpr -> Int -> Map String Int
 getConstantsHTHHS (Assign(e1, e2)) s = getConstantsHTHHE e2 s
 getConstantsHTHHS (New(typ, exprs)) s = Map.empty
+--here we could add method calls and referenced classes. But I'm not going to yet. Shits complicated.
 getConstantsHTHHS (MethodCall(expr, str, exprs)) s = Map.empty 
 getConstantsHTHHS (TypedStmtExpr(stmtExpr, typ)) s = Map.fromList $ map (\(s, i) -> ((typ ++ ":" ++ s), i)) $ Map.toList $ getConstantsHTHHS stmtExpr s
 
@@ -191,7 +192,12 @@ constantsHTEntryToCP_Info (s, i) = let l = reverse $ splitOn ":" s in
       | otherwise                   -> [Utf8_Info { tag_cp = TagUtf8, tam_cp = length content, cad_cp = content, desc = "#" ++ (show i) ++ ":" ++ typ ++ ":" ++ content ++ "!!STRANGE!!"}]
     
 
-
+{-
+  Construct the CP Pool by first constructing the UTF8 part (or most of it), then adding Classes, Fields, and Methods. Finally add constants (i.e. 5000).
+  Concerning Classes: We add the Super class and ourself.
+  We also have to add the NameAndType for Object.<init>, since it's not getting referenced but still called.
+  List comprehensions for style points.
+-}
 get_CP_Infos :: Class -> CP_Infos
 get_CP_Infos c@(Class(typ, fieldDecls, methodDecls)) = do
   let cpht = getUtf8HashTable c
@@ -274,7 +280,11 @@ get_Method_Infos c@(Class(_, _, methodDecls)) = let ht = get_CP_Map c in
       array_attr_attr = []
   }] 
 }| m@(Method(typ, name, args, code, _)) <- methodDecls, 
-   let (compiledCode, locals, stackHeight) = compileStmt code ht (Map.fromList [(s, i) | (_, s) <- args, i <- [1..((length args) + 1)]]) 0]
+   let (compiledCode, locals, stackHeight) = compileStmt code ht (argsToLocalHT args 0) 0]
+
+argsToLocalHT :: [(String, String)] -> Int -> Map String Int
+argsToLocalHT [] _ = Map.empty
+argsToLocalHT ((t, a):l) i = Map.insert a i $ argsToLocalHT l (i+1)
 
 retTypLookup :: Map Type String
 retTypLookup = Map.fromList [("I", "i"), ("C", "c"), ("Z", "i"), 
@@ -284,7 +294,9 @@ retTypLookup = Map.fromList [("I", "i"), ("C", "c"), ("Z", "i"),
         
 -- "PHCL" <==> long commands (goto b1 b2) are encoded as one string, so we introduce this PlaceHolder to correct CodeLength
 -- Bytecodegen deletes those
-
+-- recurse through stuff
+-- lookup stuff in the locals or the cp table
+-- some clever ideas, but not really
 compileStmt :: Stmt -> Map String Int -> Map String Int -> Int -> ([Code], Map String Int, Int)
 compileStmt (Block([]))                      ht locals sh = ([], locals, 0)
 compileStmt (Block(stmt:stmts))              ht locals sh = 
@@ -321,20 +333,48 @@ compileExpr (LocalOrFieldVar s)              ht locals sh = case (Map.lookup s l
   Just i ->  (["iload " ++ (show i), "PHCL", "PHCL"], locals, sh + 1)
   Nothing -> (["ldc "   ++ (show $ ht Map.! ("field:" ++ s)), "PHCL", "PHCL"], locals, sh + 1)
 compileExpr (InstVar (expr, str))            ht locals sh = let (code, locals1, sh1) = compileExpr expr ht locals sh in (["instvar: "] ++ code ++ [", " ++ str], locals1, sh1)
+compileExpr (Unary (str, LocalOrFieldVar(var))) ht locals sh =   case (Map.lookup var locals) of 
+  Just i  -> case str of "++" -> (["iinc " ++ (show i) ++ " 1"  ], locals, sh)
+                         "--" -> (["iinc " ++ (show i) ++ " 255"], locals, sh)  
+  Nothing -> case str of "++" -> (["wide iinc" ++ (show $ ht Map.! var) ++ " 1"  ], locals, sh)
+                         "--" -> (["wide iinc" ++ (show $ ht Map.! var) ++ " 255"], locals, sh)
+  
 compileExpr (Unary (str, expr))              ht locals sh = let (code, locals1, sh1) = compileExpr expr ht locals sh in 
-  (["unary: " ++ str ++ ", "] ++ code, locals1, sh1)
+  case str of 
+    "!"   -> (code ++ ["iconst_0", "ixor", "ifeq 4", "iconst_0", "goto 2", "iconst_1"], locals1, sh1 + 1)
+    "~"   -> (code ++ ["iconst_0", "ixor"], locals1, sh1 + 1)
+    _     -> (["unary: " ++ str ++ ", "] ++ code, locals1, sh1)
 compileExpr (Binary (str, expr1, expr2))     ht locals sh = 
   let (code1, locals1, sh1) = compileExpr expr1 ht locals sh
-      (code2, locals2, sh2) = compileExpr expr2 ht locals sh1
-      bin                   = case str of
-        "==" -> ["ixor", "ineg"] 
-        ">"  -> ["if_icmpgt " ++ (show 4), "PHCL", "PHCL", "iconst_0", "goto 4", "PHCL", "PHCL", "iconst_1"]
-        "<"  -> ["if_icmplt " ++ (show 4), "PHCL", "PHCL", "iconst_0", "goto 4", "PHCL", "PHCL", "iconst_1"]
-        ">=" -> ["if_icmpge " ++ (show 4), "PHCL", "PHCL", "iconst_0", "goto 4", "PHCL", "PHCL", "iconst_1"]
-        "<=" -> ["if_icmple " ++ (show 4), "PHCL", "PHCL", "iconst_0", "goto 4", "PHCL", "PHCL", "iconst_1"]
-        "/"  -> ...
-        _    -> [str]
-  in  (code1 ++ code2 ++ bin, locals, max sh1 sh2)
+      (code2, locals2, sh2) = compileExpr expr2 ht locals sh1 in
+      case str of
+        --don't execute the code after these if the first result is bad/good
+        "&&" -> (code1 ++ ["ifeq " ++ (show $ length code2), "PHCL", "PHCL"] ++ code2, locals, max sh1 sh2)
+        "||" -> (code1 ++ ["ifne " ++ (show $ length code2), "PHCL", "PHCL"] ++ code2, locals, max sh1 sh2)
+        _    -> let bin = case str of
+                            -- I hate haskells indentation rules. Just blank, honest hate.
+                            -- ==  is (!=, then invert)
+                            "==" -> ["ixor", "ifeq 4", "iconst_0", "goto 2", "iconst_1"] 
+                            "!=" -> ["ixor"]
+                            -- all others are implemented by comparing, then pushing 0 or 1
+                            ">"  -> ["if_icmpgt " ++ (show 4), "PHCL", "PHCL", "iconst_0", "goto 4", "PHCL", "PHCL", "iconst_1"]
+                            "<"  -> ["if_icmplt " ++ (show 4), "PHCL", "PHCL", "iconst_0", "goto 4", "PHCL", "PHCL", "iconst_1"]
+                            ">=" -> ["if_icmpge " ++ (show 4), "PHCL", "PHCL", "iconst_0", "goto 4", "PHCL", "PHCL", "iconst_1"]
+                            "<=" -> ["if_icmple " ++ (show 4), "PHCL", "PHCL", "iconst_0", "goto 4", "PHCL", "PHCL", "iconst_1"]
+                            -- these are easy
+                            "+"  -> ["iadd"]
+                            "-"  -> ["isub"]
+                            "*"  -> ["imul"]
+                            "/"  -> ["idiv"]
+                            "<<" -> ["ishl"]
+                            ">>" -> ["ishr"]
+                            ">>>"-> ["iushr"]
+                            "&"  -> ["iand"]
+                            "&&" -> ["iand"]
+                            "|"  -> ["ior"]
+                            "||" -> ["ior"]
+                            _    -> [str]
+                          in  (code1 ++ code2 ++ bin, locals, max sh1 sh2)
 compileExpr (Integer i)                      ht locals sh = (["ldc " ++ (show $ ht Map.! ("I:" ++ (show i))), "PHCL", "PHCL"], locals, sh + 1)
 compileExpr (Bool b)                         ht locals sh 
   | b == True  = (["iconst_1"], locals, sh + 1)
@@ -353,12 +393,12 @@ compileStmtExpr (Assign(TypedExpr(LocalOrFieldVar var, typ1), TypedExpr(expr1, t
                   code1 ++ ["putfield " ++ (show $ ht Map.! ("field:" ++ var)), "PHCL", "PHCL"], locals1, sh1 + 1)
 compileStmtExpr (Assign(TypedExpr(InstVar(TypedExpr(LocalOrFieldVar clas, clasTyp), var), _), TypedExpr(expr1, typ2))) ht locals sh =
   let (code1, locals1, sh1) = compileExpr expr1 ht locals sh in 
-    (["ldc " ++ (show $ (ht Map.! ("class:" ++ clas))), "PHCl", "PHCl"] ++
+    (["ldc " ++ (show $ (ht Map.! ("class:" ++ clas))), "PHCL", "PHCL"] ++
        code1 ++ ["putfield " ++ (show $ ht Map.! ("field:" ++ var)), "PHCL", "PHCL"], locals1, sh1 + 1)
 
 compileStmtExpr (New(typ, exprs)) ht locals sh = 
   let (code1, locals1, sh1) = compileExprs exprs ht locals sh in 
-    (["new: " ++ typ ++ ":"] ++ code1, locals1, sh1)
+    (code1 ++ ["new " ++ (show $ ht Map.! ("class:" ++ typ))], locals1, sh1)
 
 compileStmtExpr (MethodCall(Super, str, exprs)) ht locals sh = 
   let (code1, locals1, sh1) = compileExpr  Super ht locals  sh 
@@ -421,6 +461,7 @@ main = do
   putStrLn $ Pr.ppShow $ sortMap $ get_CP_Map example
   --putStrLn $ Pr.ppShow $ codegen example
   --putStrLn $ Pr.ppShow $ bytecodegen $ codegen example
+  putStrLn $ Pr.ppShow $ argsToLocalHT [("I", "n"), ("I", "n1"), ("I", "n2")] 0
   saveBytecode "Bsp.class" $ bytecodegen $ codegen example
   writeFile "Bsp.ClassFile" $ Pr.ppShow $ sortMap $ get_CP_Map example
   appendFile "Bsp.ClassFile" "\n\n"
