@@ -210,22 +210,22 @@ fibNumClass = [head addClass, head subClass, Class("FibNumbers",
                     [FieldDecl("AddTest", "add"), FieldDecl("SubTest", "sub")],
                     [Method("V", "<init>", [],
                         Block[
-                              --(LocalVarDecl("I", "i"),
-                              --LocalVarDecl("I", "j"),
-                              --LocalVarDecl("I", "z"),
-                              --LocalVarDecl("Z", "b"),
-                              --StmtExprStmt(Assign(LocalOrFieldVar("i"), Integer(1))), 
-                              --StmtExprStmt(Assign(LocalOrFieldVar("j"), Integer(1))),
-                              --StmtExprStmt(Assign(LocalOrFieldVar("z"), Integer(6))),
-                              --StmtExprStmt(Assign(LocalOrFieldVar("b"), Bool(True))),
-                              --LocalVarDecl("I", "k"),
-                              --StmtExprStmt(Assign(LocalOrFieldVar("k"), Integer(0))), 
-                              --LocalVarDecl("I", "temp"),
-                              --StmtExprStmt(Assign(LocalOrFieldVar("temp"), LocalOrFieldVar("j"))), 
-                              --StmtExprStmt(Assign(LocalOrFieldVar("add"), 
-                              --    StmtExprExpr(New("AddTest", [])))),
-                              --StmtExprStmt(Assign(LocalOrFieldVar("sub"), 
-                              --    StmtExprExpr(New("SubTest", [])))))
+                              LocalVarDecl("I", "i"),
+                              LocalVarDecl("I", "j"),
+                              LocalVarDecl("I", "z"),
+                              LocalVarDecl("Z", "b"),
+                              StmtExprStmt(Assign(LocalOrFieldVar("i"), Integer(1))), 
+                              StmtExprStmt(Assign(LocalOrFieldVar("j"), Integer(1))),
+                              StmtExprStmt(Assign(LocalOrFieldVar("z"), Integer(6))),
+                              StmtExprStmt(Assign(LocalOrFieldVar("b"), Bool(True))),
+                              LocalVarDecl("I", "k"),
+                              StmtExprStmt(Assign(LocalOrFieldVar("k"), Integer(0))), 
+                              LocalVarDecl("I", "temp"),
+                              StmtExprStmt(Assign(LocalOrFieldVar("temp"), LocalOrFieldVar("j"))), 
+                              StmtExprStmt(Assign(LocalOrFieldVar("add"), 
+                                  StmtExprExpr(New("AddTest", [])))),
+                              StmtExprStmt(Assign(LocalOrFieldVar("sub"), 
+                                  StmtExprExpr(New("SubTest", []))))
                         ], False),
                     Method("I", "fibMethod",
                         [],
@@ -288,35 +288,35 @@ fibNumClass = [head addClass, head subClass, Class("FibNumbers",
                     
 main :: IO()
 main = do
-    putStrLn $ Pr.ppShow $ typecheck equIntClass
-    putStrLn $ Pr.ppShow $ getConstantsHT (getMethodDeclsFromClass $ head $ typecheck equIntClass) 0
-    putStrLn $ Pr.ppShow $ getConstantsCpEntries $ head $ typecheck equIntClass
-    putStrLn $ Pr.ppShow $ get_CP_Map $ head $ typecheck equIntClass
-    putStrLn $ Pr.ppShow $ get_CP_Infos $ head $ typecheck equIntClass
+    --putStrLn $ Pr.ppShow $ typecheck equIntClass
+    --putStrLn $ Pr.ppShow $ getConstantsHT (getMethodDeclsFromClass $ head $ typecheck equIntClass) 0
+    --putStrLn $ Pr.ppShow $ getConstantsCpEntries $ head $ typecheck equIntClass
+    --putStrLn $ Pr.ppShow $ get_CP_Map $ head $ typecheck equIntClass
+    --putStrLn $ Pr.ppShow $ get_CP_Infos $ head $ typecheck equIntClass
     --putStrLn $ Pr.ppShow $ codegen $ head $ typecheck equIntClass
     --putStrLn $ Pr.ppShow $ compIntClass
     --putStrLn $ Pr.ppShow $ codegen $ head $ typecheck compareIntClass
-    putStrLn $ Pr.ppShow $ whileClass
-    --putStrLn $ Pr.ppShow $ codegen $ head $ typecheck whileClass
-    putStrLn $ Pr.ppShow $ voidClass
+    --putStrLn $ Pr.ppShow $ whileClass
+    putStrLn $ Pr.ppShow $ typecheck whileClass
+    --putStrLn $ Pr.ppShow $ voidClass
     --putStrLn $ Pr.ppShow $ codegen $ head $ typecheck voidClass
-    putStrLn $ Pr.ppShow $ thisClass
+    --putStrLn $ Pr.ppShow $ thisClass
     --putStrLn $ Pr.ppShow $ codegen $ head $ typecheck thisClass
-    putStrLn $ Pr.ppShow $ addClass
+    --putStrLn $ Pr.ppShow $ addClass
     --putStrLn $ Pr.ppShow $ codegen $ head $ typecheck addClass
-    putStrLn $ Pr.ppShow $ subClass
+    --putStrLn $ Pr.ppShow $ subClass
     --putStrLn $ Pr.ppShow $ codegen $ head $ typecheck subClass
-    putStrLn $ Pr.ppShow $ multClass
+    --putStrLn $ Pr.ppShow $ multClass
     --putStrLn $ Pr.ppShow $ codegen $ head $ typecheck multClass
-    putStrLn $ Pr.ppShow $ divClass
+    --putStrLn $ Pr.ppShow $ divClass
     --putStrLn $ Pr.ppShow $ codegen $ head $ typecheck divClass
-    putStrLn $ Pr.ppShow $ equBolClass
+    --putStrLn $ Pr.ppShow $ equBolClass
     --putStrLn $ Pr.ppShow $ codegen $ head $ typecheck equBolClass
-    putStrLn $ Pr.ppShow $ equIntClass
+    --putStrLn $ Pr.ppShow $ equIntClass
     --putStrLn $ Pr.ppShow $ codegen $ head $ typecheck equIntClass
-    putStrLn $ Pr.ppShow $ gretClass
+    --putStrLn $ Pr.ppShow $ gretClass
     --putStrLn $ Pr.ppShow $ codegen $ head $ typecheck gretClass
-    putStrLn $ Pr.ppShow $ lestClass
+    --putStrLn $ Pr.ppShow $ lestClass
     --putStrLn $ Pr.ppShow $ codegen $ head $ typecheck lestClass
-    putStrLn $ Pr.ppShow $ fibNumClass
+    --putStrLn $ Pr.ppShow $ fibNumClass
     --putStrLn $ Pr.ppShow $ codegen $ head $ typecheck fibNumClass

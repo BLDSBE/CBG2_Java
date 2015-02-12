@@ -15,9 +15,16 @@ type LookUp = Type -> (Env, MethodMap)		-- A function type that allows a direkt 
 														-- ClassMap and prevents from manipulating it
 
 
-{- TODO:
-	- methods from Object
+{-
+
+This typechecker first creates a Map which contains all classes with their fields and methods and 
+associated types.
+Then it processes each class first creating an evnvironment which contains all fields of this class.
+Later local variables are added to env. The ClassMap and Env are threaded through all recursive
+computations.
+For each class 
 -}
+
 
 --Program-------------------------------------------------------------------------------------------
 typecheck :: Prg -> Prg
@@ -173,6 +180,7 @@ typeCheckArgs (declArgTyp : declArgTyps) (callArgTyp : callArgTyps) rTyp =
 					then typeCheckArgs declArgTyps callArgTyps rTyp
 					else error (typeMissmatchError callArgTyp declArgTyp)
 typeCheckArgs [] [] rTyp = rTyp
+typeCheckArgs _ _ _ = error wrongNumberOfArgumentsError
 ----------------------------------------------------------------------------------------------------
 
 
@@ -371,6 +379,9 @@ voidReturnError typ = "This method must return a result of type " ++ typ
 
 notVoidReturnError :: String
 notVoidReturnError = "Void methods cannot return a value"
+
+wrongNumberOfArgumentsError :: String
+wrongNumberOfArgumentsError = "Wrong number of arguments provided"
 ----------------------------------------------------------------------------------------------------
 
 
@@ -440,7 +451,7 @@ testVoidError = [Class("CompareTest",
 testArgError = [Class("ArgTest",
 						[],
 						[Method(voidType, "a", [(intType, "i")], 
-							Block([StmtExprStmt(MethodCall(ClassId("ArgTest"), "a", [Char('a')]))]),
+							Block([StmtExprStmt(MethodCall(ClassId("ArgTest"), "a", [Char('a'), Char('b') ]))]),
 							True)]
 						)]
 
