@@ -334,10 +334,10 @@ compileExpr (LocalOrFieldVar s)              ht locals sh = case (Map.lookup s l
   Nothing -> (["ldc "   ++ (show $ ht Map.! ("field:" ++ s)), "PHCL", "PHCL"], locals, sh + 1)
 compileExpr (InstVar (expr, str))            ht locals sh = let (code, locals1, sh1) = compileExpr expr ht locals sh in (["instvar: "] ++ code ++ [", " ++ str], locals1, sh1)
 compileExpr (Unary (str, LocalOrFieldVar(var))) ht locals sh =   case (Map.lookup var locals) of 
-  Just i  -> case str of "++" -> (["iinc " ++ (show i) ++ " 1"  ], locals, sh)
-                         "--" -> (["iinc " ++ (show i) ++ " 255"], locals, sh)  
-  Nothing -> case str of "++" -> (["wide iinc" ++ (show $ ht Map.! var) ++ " 1"  ], locals, sh)
-                         "--" -> (["wide iinc" ++ (show $ ht Map.! var) ++ " 255"], locals, sh)
+  Just i  -> case str of "++" -> (["iinc " ++ (show i) ++  " 1"], locals, sh)
+                         "--" -> (["iinc " ++ (show i) ++ " -1"], locals, sh)  
+  Nothing -> case str of "++" -> (["wide iinc" ++ (show $ ht Map.! var) ++  " 1"], locals, sh)
+                         "--" -> (["wide iinc" ++ (show $ ht Map.! var) ++ " -1"], locals, sh)
   
 compileExpr (Unary (str, expr))              ht locals sh = let (code, locals1, sh1) = compileExpr expr ht locals sh in 
   case str of 
