@@ -429,8 +429,6 @@ main = do
     putStrLn $ Pr.ppShow $ get_CP_Map $ head $ typecheck equIntClass
     putStrLn $ Pr.ppShow $ get_CP_Infos $ head $ typecheck equIntClass
     putStrLn $ Pr.ppShow $ codegen $ head $ typecheck equIntClass
-    putStrLn $ Pr.ppShow $ compIntClass
-    putStrLn $ Pr.ppShow $ codegen $ head $ typecheck compareIntClass
     putStrLn $ Pr.ppShow $ typecheck $ whileClass
     putStrLn $ Pr.ppShow $ codegen $ head $ typecheck whileClass
     putStrLn $ Pr.ppShow $ typecheck $ voidClass
