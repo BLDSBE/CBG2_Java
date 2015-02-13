@@ -370,9 +370,7 @@ compileExpr (Binary (str, expr1, expr2))     ht locals sh =
                             ">>" -> ["ishr"]
                             ">>>"-> ["iushr"]
                             "&"  -> ["iand"]
-                            "&&" -> ["iand"]
                             "|"  -> ["ior"]
-                            "||" -> ["ior"]
                             _    -> [str]
                           in  (code1 ++ code2 ++ bin, locals, max sh1 sh2)
 compileExpr (Integer i)                      ht locals sh = (["ldc " ++ (show $ ht Map.! ("I:" ++ (show i))), "PHCL", "PHCL"], locals, sh + 1)
